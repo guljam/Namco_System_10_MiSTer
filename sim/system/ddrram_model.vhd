@@ -16,7 +16,9 @@ entity ddrram_model is
       RANDOMTIMING : std_logic := '0';
       outputVRAM2  : std_logic := '0';
       outputVRAM3  : std_logic := '0';
-      LOGVRAM      : std_logic := '1'   -- '0': no gra_fb_out.gra VRAM write log (faster long runs)
+      LOGVRAM      : std_logic := '1';  -- '0': no gra_fb_out.gra VRAM write log (faster long runs)
+      INITFILE     : string := "NONE";   -- System 10: MEM board image preloaded at INITOFFSET
+      INITOFFSET   : integer := 16#2000000#  -- byte offset from DDR3 0x30000000
    );
    port 
    (
@@ -36,7 +38,7 @@ end entity;
 architecture arch of ddrram_model is
 
    -- not full size, because of memory required
-   type t_data is array(0 to (2**24)-1) of integer;
+   type t_data is array(0 to (2**25)-1) of integer;   -- 128 MB from 0x30000000
    type bit_vector_file is file of bit_vector;
    type t_ssfile is file of character;
    
@@ -44,7 +46,7 @@ architecture arch of ddrram_model is
    
 begin
 
-   intern_addr <= "00000" & DDRAM_ADDR(22 downto 0) & "0";
+   intern_addr <= "0000" & DDRAM_ADDR(23 downto 0) & "0";
 
    process
    
@@ -86,6 +88,7 @@ begin
       variable dumpVRAMimage  : std_logic;
       
       file ssfile             : t_ssfile;
+      variable read_char0, read_char1, read_char2, read_char3 : character;
       
       -- copy from std_logic_arith, not used here because numeric std is also included
       function CONV_STD_LOGIC_VECTOR(ARG: INTEGER; SIZE: INTEGER) return STD_LOGIC_VECTOR is
@@ -116,29 +119,49 @@ begin
    
    begin
    
+      if (INITFILE /= "NONE") then
+         file_open(f_status, ssfile, INITFILE, read_mode);
+         assert f_status = open_ok report "cannot open DDR3 image " & INITFILE severity failure;
+         targetpos := INITOFFSET / 4;
+         loadcount := 0;
+         while not endfile(ssfile) loop
+            read(ssfile, read_char0); if endfile(ssfile) then read_char1 := nul; else read(ssfile, read_char1); end if;
+            if endfile(ssfile) then read_char2 := nul; else read(ssfile, read_char2); end if;
+            if endfile(ssfile) then read_char3 := nul; else read(ssfile, read_char3); end if;
+            data(targetpos) := to_integer(signed(std_logic_vector(to_unsigned(character'pos(read_char3), 8)) &
+                                                 std_logic_vector(to_unsigned(character'pos(read_char2), 8)) &
+                                                 std_logic_vector(to_unsigned(character'pos(read_char1), 8)) &
+                                                 std_logic_vector(to_unsigned(character'pos(read_char0), 8))));
+            targetpos := targetpos + 1;
+            loadcount := loadcount + 4;
+         end loop;
+         file_close(ssfile);
+         report "DDR3 image " & INITFILE & ": " & integer'image(loadcount) & " bytes" severity note;
+      end if;
+
       file_open(f_status, outfile, "gra_fb_out.gra", write_mode);
       file_close(outfile);
       
-      file_open(f_status, outfile, "gra_fb_out.gra", append_mode);
+      file_open(f_status, outfile, "gra_fb_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
       write(line_out, string'("1024#512#1")); 
       writeline(outfile, line_out);
       
       if (outputVRAM3 = '1') then
          file_open(f_status, outfile1, "gra_fb1_out.gra", write_mode);
          file_close(outfile1);
-         file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode);
+         file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb1_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
          write(line_out, string'("1024#512#1")); 
          writeline(outfile1, line_out);
          
          file_open(f_status, outfile2, "gra_fb2_out.gra", write_mode);
          file_close(outfile2);
-         file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode);
+         file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb2_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
          write(line_out, string'("1024#512#1")); 
          writeline(outfile2, line_out);
          
          file_open(f_status, outfile3, "gra_fb3_out.gra", write_mode);
          file_close(outfile3);
-         file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode);
+         file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb3_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
          write(line_out, string'("1024#512#1")); 
          writeline(outfile3, line_out);
       end if;
@@ -289,18 +312,18 @@ begin
          
          if (pixelCount > 1000 or pixelTimeout = 1) then
             file_close(outfile);
-            file_open(f_status, outfile, "gra_fb_out.gra", append_mode);
+            file_open(f_status, outfile, "gra_fb_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
             pixelCount := 0;
             
             if (outputVRAM3 = '1') then
                file_close(outfile1);
-               file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode);
+               file_open(f_status, outfile1, "gra_fb1_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb1_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
                
                file_close(outfile2);
-               file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode);
+               file_open(f_status, outfile2, "gra_fb2_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb2_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
                
                file_close(outfile3);
-               file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode);
+               file_open(f_status, outfile3, "gra_fb3_out.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb3_out.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
             end if;
             
          end if;

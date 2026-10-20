@@ -49,7 +49,7 @@ begin
          file_open(f_status, outfile, "gra_fb_out_vga.gra", write_mode);
          file_close(outfile);
          
-         file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode);
+         file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb_out_vga.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
          write(line_out, string'("640#480#2")); 
          writeline(outfile, line_out);
          
@@ -80,7 +80,7 @@ begin
                   if (pixelcounter > 0) then
                      linecounter <= linecounter + 1;
                      file_close(outfile);
-                     file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode);
+                     file_open(f_status, outfile, "gra_fb_out_vga.gra", append_mode); assert f_status = open_ok report "reopen failed: gra_fb_out_vga.gra " & FILE_OPEN_STATUS'image(f_status) severity failure;
                      if (il_1 /= video_interlace) then
                         il_on := '1';
                      end if;

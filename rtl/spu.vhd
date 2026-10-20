@@ -2533,7 +2533,7 @@ begin
 
    -- synthesis translate_off
 
-   goutput : if 1 = 1 generate
+   goutput : if 1 = 0 generate   -- SPU sample debug dump off (slow); set 1 = 1 to enable
    signal outputCnt        : unsigned(31 downto 0) := (others => '0'); 
    signal clkCounter       : unsigned(31 downto 0) := (others => '0'); 
    signal clkCounter_start : unsigned(31 downto 0) := (others => '0'); 
@@ -2567,9 +2567,9 @@ begin
 
       begin
    
-         file_open(f_status, outfile, "R:\\debug_sound_sim.txt", write_mode);
+         file_open(f_status, outfile, "debug_sound_sim.txt", write_mode);
          file_close(outfile);
-         file_open(f_status, outfile, "R:\\debug_sound_sim.txt", append_mode);
+         file_open(f_status, outfile, "debug_sound_sim.txt", append_mode);
          
          debugout_ptr := -1;
          outputNext := 0;
@@ -2827,9 +2827,9 @@ begin
             if (reset = '1') then
                clkCounter <= (others => '0');
                file_close(outfile);
-               file_open(f_status, outfile, "R:\\debug_sound_sim.txt", write_mode);
+               file_open(f_status, outfile, "debug_sound_sim.txt", write_mode);
                file_close(outfile);
-               file_open(f_status, outfile, "R:\\debug_sound_sim.txt", append_mode);
+               file_open(f_status, outfile, "debug_sound_sim.txt", append_mode);
                debugout_ptr := -1;
             end if;
            

@@ -3486,10 +3486,10 @@ begin
          variable line_out : line;
       begin
    
-         file_open(f_status, outfile, "R:\\debug_gpufifo_sim.txt", write_mode);
+         file_open(f_status, outfile, "debug_gpufifo_sim.txt", write_mode);
          file_close(outfile);
          
-         file_open(f_status, outfile, "R:\\debug_gpufifo_sim.txt", append_mode);
+         file_open(f_status, outfile, "debug_gpufifo_sim.txt", append_mode);
          
          while (true) loop
             
@@ -3527,10 +3527,10 @@ begin
          variable line_out : line;
       begin
    
-         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", write_mode);
+         file_open(f_status, outfile, "debug_pixel_sim.txt", write_mode);
          file_close(outfile);
          
-         file_open(f_status, outfile, "R:\\debug_pixel_sim.txt", append_mode);
+         file_open(f_status, outfile, "debug_pixel_sim.txt", append_mode);
          
          while (true) loop
             

@@ -26,7 +26,7 @@ module s10_io #(
     input  wire  [1:0] size,            // 00 byte, 01 half, 10 word
     input  wire        rd,
     input  wire        wr,
-    output reg  [31:0] rdata = '0,      // registered, zero when not selected (OR-ed board bus)
+    output reg  [31:0] rdata = 0,      // registered, zero when not selected (OR-ed board bus)
 
     input  wire  [7:0] dsw,             // DIP switches, 1 = on
     input  wire [31:0] in1,             // IN1, active low, MAME bit layout
@@ -36,12 +36,12 @@ module s10_io #(
 );
     // ------------------------------------------------------------------ 100 Hz I/O interrupt
     localparam int TICK = CLK_HZ / 100;
-    reg [21:0] tcnt = '0;
-    reg  [3:0] intst = '0;
+    reg [21:0] tcnt = 0;
+    reg  [3:0] intst = 0;
 
     // ------------------------------------------------------------------ EXIO ident shifter
     reg  [2:0] exio_bit  = 3'd7;
-    reg  [5:0] exio_byte = '0;
+    reg  [5:0] exio_byte = 0;
     wire [1:0] exio_val  = (exio_byte >= 6'h20) ? 2'd3 : {2{exio_ident[exio_bit]}};
 
     // ------------------------------------------------------------------ I2C (MAME i2c_update)
@@ -49,7 +49,7 @@ module s10_io #(
     reg       host_clk = 1'b1, host_dat = 1'b1, dev_clk = 1'b1, dev_dat = 1'b1;
     reg       prev_clk = 1'b1, prev_dat = 1'b1;
     reg [1:0] i2c_mode = I2C_IDLE;
-    reg [3:0] i2c_bit  = '0;            // 7..0, then "negative"
+    reg [3:0] i2c_bit  = 0;            // 7..0, then "negative"
     wire      bus_clk  = dev_clk & host_clk;
     wire      bus_dat  = dev_dat & host_dat;
 
@@ -106,21 +106,21 @@ module s10_io #(
 
     always @(posedge clk) begin
         irq10 <= 1'b0;
-        rdata <= '0;
+        rdata <= 0;
 
         if (reset) begin
-            tcnt      <= '0;
-            intst     <= '0;
+            tcnt      <= 0;
+            intst     <= 0;
             exio_bit  <= 3'd7;
-            exio_byte <= '0;
+            exio_byte <= 0;
             host_clk  <= 1'b1; host_dat <= 1'b1;
             dev_clk   <= 1'b1; dev_dat  <= 1'b1;
             prev_clk  <= 1'b1; prev_dat <= 1'b1;
             i2c_mode  <= I2C_IDLE;
-            i2c_bit   <= '0;
+            i2c_bit   <= 0;
         end else begin
             if (tcnt == TICK - 1) begin
-                tcnt     <= '0;
+                tcnt     <= 0;
                 intst[3] <= 1'b1;
                 irq10    <= 1'b1;
             end else tcnt <= tcnt + 1'd1;
@@ -146,7 +146,7 @@ module s10_io #(
                 end
                 if (wmask[3:2] != 2'b00) begin
                     case (a_hi)
-                        24'hBA0002: begin exio_bit <= 3'd7; exio_byte <= '0; end
+                        24'hBA0002: begin exio_bit <= 3'd7; exio_byte <= 0; end
                         24'hBA000A: begin host_dat <= wdata[16]; i2c_update(host_clk, wdata[16]); end
                         24'hBA0012: intst[0] <= 1'b0;
                         24'hBA0016: intst[2] <= 1'b0;

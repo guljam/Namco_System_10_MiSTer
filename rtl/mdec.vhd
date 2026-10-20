@@ -1411,21 +1411,21 @@ begin
          variable fifoout_cnt       : integer;
       begin
    
-         file_open(f_status, outfile_RL, "R:\\debug_mdec_RL_sim.txt", write_mode);
+         file_open(f_status, outfile_RL, "debug_mdec_RL_sim.txt", write_mode);
          file_close(outfile_RL);
-         file_open(f_status, outfile_RL, "R:\\debug_mdec_RL_sim.txt", append_mode);
+         file_open(f_status, outfile_RL, "debug_mdec_RL_sim.txt", append_mode);
          
-         file_open(f_status, outfile_IDCT, "R:\\debug_mdec_IDCT_sim.txt", write_mode);
+         file_open(f_status, outfile_IDCT, "debug_mdec_IDCT_sim.txt", write_mode);
          file_close(outfile_IDCT);
-         file_open(f_status, outfile_IDCT, "R:\\debug_mdec_IDCT_sim.txt", append_mode);
+         file_open(f_status, outfile_IDCT, "debug_mdec_IDCT_sim.txt", append_mode);
          
-         file_open(f_status, outfile_COLOR, "R:\\debug_mdec_COLOR_sim.txt", write_mode);
+         file_open(f_status, outfile_COLOR, "debug_mdec_COLOR_sim.txt", write_mode);
          file_close(outfile_COLOR);
-         file_open(f_status, outfile_COLOR, "R:\\debug_mdec_COLOR_sim.txt", append_mode);         
+         file_open(f_status, outfile_COLOR, "debug_mdec_COLOR_sim.txt", append_mode);         
          
-         file_open(f_status, outfile_FIFOOUT, "R:\\debug_mdec_FIFOOUT_sim.txt", write_mode);
+         file_open(f_status, outfile_FIFOOUT, "debug_mdec_FIFOOUT_sim.txt", write_mode);
          file_close(outfile_FIFOOUT);
-         file_open(f_status, outfile_FIFOOUT, "R:\\debug_mdec_FIFOOUT_sim.txt", append_mode);
+         file_open(f_status, outfile_FIFOOUT, "debug_mdec_FIFOOUT_sim.txt", append_mode);
          
          debugCnt_RL      <= 0;
          debugCnt_IDCT    <= 0;

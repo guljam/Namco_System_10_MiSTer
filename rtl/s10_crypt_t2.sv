@@ -69,12 +69,13 @@ wire [15:0] lin;
 genvar j;
 generate
     for (j = 0; j < 16; j = j + 1) begin : g_bit
-        assign lin[j] = ^({emask[j*64 +: 64], dmask[j*64 +: 64]} & {c_next, p_next});
+        // two 64-bit parities (identical to one 128-bit parity; NVC 1.23 mis-reduces vectors > 64 bits)
+        assign lin[j] = ^(emask[j*64 +: 64] & c_next) ^ ^(dmask[j*64 +: 64] & p_next);
     end
 endgenerate
 
-wire nl_a = ^({nl_ac, nl_ap} & {c_next, p_next});
-wire nl_b = ^({nl_bc, nl_bp} & {c_next, p_next});
+wire nl_a = ^(nl_ac & c_next) ^ ^(nl_ap & p_next);
+wire nl_b = ^(nl_bc & c_next) ^ ^(nl_bp & p_next);
 
 wire [15:0] mask_next = lin ^ xmask ^ (nl_out & {16{nl_a & nl_b}});
 

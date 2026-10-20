@@ -20,3 +20,6 @@ transcript
 vish_stacktrace.vstf
 sim/gpu/build_*/
 sim/gpu/*_frame.txt
+sim/*/build*/
+sim/board/*.log
+sim/system/tb_s10.vhd

@@ -278,9 +278,9 @@ begin
          variable line_out             : line;
       begin
    
-         file_open(f_status, outfile, "R:\\debug_vram2cpu_sim.txt", write_mode);
+         file_open(f_status, outfile, "debug_vram2cpu_sim.txt", write_mode);
          file_close(outfile);
-         file_open(f_status, outfile, "R:\\debug_vram2cpu_sim.txt", append_mode);
+         file_open(f_status, outfile, "debug_vram2cpu_sim.txt", append_mode);
          
          while (true) loop
             

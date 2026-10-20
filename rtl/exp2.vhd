@@ -78,10 +78,10 @@ begin
          variable line_out : line;
       begin
    
-         file_open(f_status, outfile, "R:\\debug_tty_sim.txt", write_mode);
+         file_open(f_status, outfile, "debug_tty_sim.txt", write_mode);
          file_close(outfile);
          
-         file_open(f_status, outfile, "R:\\debug_tty_sim.txt", append_mode);
+         file_open(f_status, outfile, "debug_tty_sim.txt", append_mode);
          
          while (true) loop
             
@@ -95,7 +95,7 @@ begin
                   elsif (bus_dataWrite = x"0A") then -- '\n'
                      writeline(outfile, line_out);
                      file_close(outfile);
-                     file_open(f_status, outfile, "R:\\debug_tty_sim.txt", append_mode);
+                     file_open(f_status, outfile, "debug_tty_sim.txt", append_mode);
                   else
                      write(line_out, character'val(to_integer(unsigned(bus_dataWrite)))); 
                   end if;

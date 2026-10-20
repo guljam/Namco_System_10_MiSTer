@@ -48,28 +48,28 @@ module s10_loader #(
 
     // ---- SDRAM channel 3 (s10_ch3): BIOS words and fills
     output reg          dl_req = 1'b0,
-    output reg  [26:0]  dl_addr = '0,
-    output reg  [31:0]  dl_data = '0,
+    output reg  [26:0]  dl_addr = 0,
+    output reg  [31:0]  dl_data = 0,
     input  wire         dl_done,
     output reg          fill_start = 1'b0,
-    output reg  [26:0]  fill_base = '0,
-    output reg  [20:0]  fill_words = '0,
-    output reg  [31:0]  fill_value = '0,
+    output reg  [26:0]  fill_base = 0,
+    output reg  [20:0]  fill_words = 0,
+    output reg  [31:0]  fill_value = 0,
     input  wire         fill_busy,
 
     // ---- DDR3 writer (clk2 domain), owns the PSX DDR3 port while own = 1
     output wire         ddr_own,
     output reg          ddr_we = 1'b0,
-    output reg  [27:0]  ddr_addr = '0,      // byte address from 0x30000000
-    output reg  [63:0]  ddr_din = '0,
-    output reg   [7:0]  ddr_be = '0,
+    output reg  [27:0]  ddr_addr = 0,      // byte address from 0x30000000
+    output reg  [63:0]  ddr_din = 0,
+    output reg   [7:0]  ddr_be = 0,
     input  wire         ddr_busy
 );
     // =====================================================================================================
     // Board record: 464 bytes
     // =====================================================================================================
     localparam int RECB = 464;
-    reg  [8*RECB-1:0] rec = '0;
+    reg  [8*RECB-1:0] rec = 0;
 
     assign board_memn  = rec[8*4 +: 8] == 8'd1;
     assign crypt_type  = rec[8*5 +: 2];
@@ -100,25 +100,25 @@ module s10_loader #(
     reg        dl_q = 1'b0;
     wire       dl_rise = ioctl_download && !dl_q;
     reg        bios_dl = 1'b0, rec_dl = 1'b0, img_dl = 1'b0;
-    reg [27:0] img_off = '0;               // image offset of the current ioctl index
+    reg [27:0] img_off = 0;               // image offset of the current ioctl index
     reg        bios_filling = 1'b0;
 
     // BIOS stream position (MEM(N): NAND page / column)
     reg [15:0] b_page = 16'h40;
-    reg  [9:0] b_col  = '0;
-    reg [15:0] b_lo   = '0;
+    reg  [9:0] b_col  = 0;
+    reg [15:0] b_lo   = 0;
     reg        sd_wait = 1'b0;             // waiting for an SDRAM write
 
     // DDR3 writer (clk side)
-    reg [63:0] acc_d = '0;
-    reg  [7:0] acc_be = '0;
-    reg [27:0] acc_a = '0;                 // image byte offset of the beat
+    reg [63:0] acc_d = 0;
+    reg  [7:0] acc_be = 0;
+    reg [27:0] acc_a = 0;                 // image byte offset of the beat
     reg        acc_any = 1'b0;
     reg        wb_req = 1'b0;              // clk: beat handed to clk2
     reg        wb_done = 1'b0;             // clk2
-    reg [63:0] wb_d = '0;
-    reg  [7:0] wb_be = '0;
-    reg [27:0] wb_a = '0;
+    reg [63:0] wb_d = 0;
+    reg  [7:0] wb_be = 0;
+    reg [27:0] wb_a = 0;
 
     assign ioctl_wait = sd_wait || wb_req || bios_filling || fill_busy && bios_dl;
 
@@ -137,9 +137,9 @@ module s10_loader #(
             img_dl  <= (ioctl_index == 8'd2 || ioctl_index == 8'd3 || ioctl_index == 8'd9);
             img_off <= (ioctl_index == 8'd3) ? 28'h800000 : (ioctl_index == 8'd9) ? save_base : 28'h0;
             b_page  <= 16'h40;
-            b_col   <= '0;
+            b_col   <= 0;
             acc_any <= 1'b0;
-            acc_be  <= '0;
+            acc_be  <= 0;
             if (ioctl_index == 8'd0) begin
                 // MAME ROM_FILL(0x55) of the 4 MB BIOS region, before the copy
                 fill_start   <= 1'b1;
@@ -156,7 +156,7 @@ module s10_loader #(
             // flush a partial DDR3 beat
             if (img_dl && acc_any && !wb_req) begin
                 wb_d <= acc_d; wb_be <= acc_be; wb_a <= acc_a; wb_req <= 1'b1;
-                acc_any <= 1'b0; acc_be <= '0;
+                acc_any <= 1'b0; acc_be <= 0;
             end
             bios_dl <= 1'b0; rec_dl <= 1'b0; img_dl <= 1'b0;
         end
@@ -192,7 +192,7 @@ module s10_loader #(
                             sd_wait <= 1'b1;
                         end
                     end
-                    if (b_col == 10'd526) begin b_col <= '0; b_page <= b_page + 1'd1; end
+                    if (b_col == 10'd526) begin b_col <= 0; b_page <= b_page + 1'd1; end
                     else b_col <= b_col + 10'd2;
                 end
             end
@@ -209,7 +209,7 @@ module s10_loader #(
                     wb_a    <= img_off + {1'b0, ioctl_addr[26:3], 3'b000};
                     wb_req  <= 1'b1;
                     acc_any <= 1'b0;
-                    acc_be  <= '0;
+                    acc_be  <= 0;
                 end
             end
         end

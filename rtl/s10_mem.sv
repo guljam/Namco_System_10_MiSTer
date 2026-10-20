@@ -45,7 +45,7 @@ module s10_mem (
     input  wire   [1:0]  size,               // 00 byte, 01 half, 10 word
     input  wire          rd,
     input  wire          wr,
-    output reg   [31:0]  rdata = '0,          // zero unless completing a read (OR-ed board bus)
+    output reg   [31:0]  rdata = 0,          // zero unless completing a read (OR-ed board bus)
     output wire          stall,
 
     // ---- PSX DMA channel 5 (MEM(N) "PIO" DMA: a 32-bit word = two data-register reads, low half first)
@@ -56,10 +56,10 @@ module s10_mem (
 
     // ---- SDRAM channel 3 client: MEM(N) SRAM at 0x1F500000 (bad-block table, 1 MB window as MAME)
     output reg           sram_req = 1'b0,
-    output reg   [19:0]  sram_addr = '0,
+    output reg   [19:0]  sram_addr = 0,
     output reg           sram_rnw = 1'b1,
-    output reg    [3:0]  sram_be = '0,
-    output reg   [31:0]  sram_wdata = '0,
+    output reg    [3:0]  sram_be = 0,
+    output reg   [31:0]  sram_wdata = 0,
     input  wire  [31:0]  sram_rdata,
     input  wire          sram_ready,
 
@@ -67,17 +67,17 @@ module s10_mem (
     input  wire          up_active,
     input  wire          up_rd,
     input  wire  [26:0]  up_addr,
-    output reg   [15:0]  up_din = '0,
+    output reg   [15:0]  up_din = 0,
     output wire          up_wait,
     output reg           save_req = 1'b0,    // pulse ~1.5 s after the last program/erase
 
     // ---- DDR3 client (clk2 domain), into psx_top's arbiter (single-beat writes, burst reads)
     output reg           ddr_request = 1'b0,
     input  wire          ddr_ack,
-    output reg    [7:0]  ddr_burstcnt = '0,
-    output reg   [27:0]  ddr_addr = '0,
-    output reg   [63:0]  ddr_din = '0,
-    output reg    [7:0]  ddr_be = '0,
+    output reg    [7:0]  ddr_burstcnt = 0,
+    output reg   [27:0]  ddr_addr = 0,
+    output reg   [63:0]  ddr_din = 0,
+    output reg    [7:0]  ddr_be = 0,
     output reg           ddr_we = 1'b0,
     output reg           ddr_rd = 1'b0,
     input  wire  [63:0]  ddr_dout,
@@ -94,8 +94,8 @@ module s10_mem (
     // Decrypters: plain = f(state, cipher) is combinational; the state advances on word_valid
     // =====================================================================================================
     reg         cr_act_p = 1'b0, cr_deact_p = 1'b0, cr_step = 1'b0;
-    reg   [3:0] cr_iv = '0;
-    reg  [15:0] cr_cipher = '0;
+    reg   [3:0] cr_iv = 0;
+    reg  [15:0] cr_cipher = 0;
     wire [15:0] t1_plain, t2_plain;
     wire        t1_active, t2_active;
 
@@ -115,6 +115,9 @@ module s10_mem (
     );
     wire        cr_active = (crypt_type == 2'd1) ? t1_active : (crypt_type == 2'd2) ? t2_active : 1'b0;
     wire [15:0] cr_plain  = (crypt_type == 2'd1) ? t1_plain  : t2_plain;
+    // the plain word for the cipher word presented with cr_step (state before the step), captured in that cycle
+    reg  [15:0] cr_plain_q = 0;
+    always @(posedge clk) if (cr_step) cr_plain_q <= cr_plain;
 
     // =====================================================================================================
     // Buffers (8 byte lanes x 128, clocked by clk2): PAGE (DDR3 data) and PGM (NAND page register)
@@ -125,15 +128,15 @@ module s10_mem (
     reg   [7:0] pm_q [0:7];
 
     reg         eng_pg_we = 1'b0;          // clk2: DDR3 beat -> PAGE
-    reg   [6:0] eng_pg_wi = '0;
-    reg  [63:0] eng_pg_wd = '0;
+    reg   [6:0] eng_pg_wi = 0;
+    reg  [63:0] eng_pg_wd = 0;
     reg         eng_rd_own = 1'b0;         // clk2: engine owns the read index (program write-back)
-    reg   [6:0] eng_ri = '0;
-    reg   [9:0] fsm_rb = '0;               // clk: byte offset the FSM reads from PAGE
+    reg   [6:0] eng_ri = 0;
+    reg   [9:0] fsm_rb = 0;               // clk: byte offset the FSM reads from PAGE
     reg         pm_we = 1'b0;              // clk: one byte into PGM
-    reg   [9:0] pm_wa = '0;
-    reg   [7:0] pm_wd = '0;
-    reg [527:0] pm_written = '0;           // PGM byte written since 0x80 (unwritten bytes program as 0xFF)
+    reg   [9:0] pm_wa = 0;
+    reg   [7:0] pm_wd = 0;
+    reg [527:0] pm_written = 0;           // PGM byte written since 0x80 (unwritten bytes program as 0xFF)
 
     always @(posedge clk2) begin
         for (int l = 0; l < 8; l++) begin
@@ -155,19 +158,19 @@ module s10_mem (
     localparam int   BURST   = 32;
 
     reg         job_req   = 1'b0;          // clk
-    reg   [1:0] job_type  = '0;
-    reg  [27:0] job_addr  = '0;            // image byte offset, 8-aligned
-    reg  [13:0] job_beats = '0;
-    reg  [63:0] job_d64   = '0;
-    reg   [7:0] job_be    = '0;
+    reg   [1:0] job_type  = 0;
+    reg  [27:0] job_addr  = 0;            // image byte offset, 8-aligned
+    reg  [13:0] job_beats = 0;
+    reg  [63:0] job_d64   = 0;
+    reg   [7:0] job_be    = 0;
     reg         job_done  = 1'b0;          // clk2
 
     localparam [2:0] E_IDLE = 3'd0, E_RDREQ = 3'd1, E_RD = 3'd2, E_WRPREP = 3'd3, E_WRREQ = 3'd4, E_WR = 3'd5;
     reg   [2:0] est = E_IDLE;
-    reg  [13:0] e_left = '0;               // beats still to transfer
-    reg   [7:0] e_burst = '0;              // beats left in the current read burst
-    reg   [6:0] e_idx = '0;
-    reg  [27:0] e_addr = '0;
+    reg  [13:0] e_left = 0;               // beats still to transfer
+    reg   [7:0] e_burst = 0;              // beats left in the current read burst
+    reg   [6:0] e_idx = 0;
+    reg  [27:0] e_addr = 0;
     reg         e_acked = 1'b0;
 
     always @(posedge clk2) begin
@@ -182,8 +185,8 @@ module s10_mem (
                     if (job_req && !job_done) begin
                         e_addr <= img_base + job_addr;
                         e_left <= job_beats;
-                        e_idx  <= '0;
-                        eng_ri <= '0;
+                        e_idx  <= 0;
+                        eng_ri <= 0;
                         if (job_type == J_FETCH) est <= E_RDREQ;
                         else begin
                             eng_rd_own <= (job_type == J_WBACK);
@@ -266,10 +269,10 @@ module s10_mem (
     reg  [15:0] n_page  [0:15];
     reg   [9:0] n_byte  [0:15];
     reg   [1:0] n_aload [0:15];
-    reg   [9:0] n_pgmcnt = '0;
-    reg   [3:0] nand_idx = '0;
-    reg  [15:0] nand_ctrl = '0;
-    reg  [23:0] nand_address = '0;         // MAME m_nand_address: column | row << 8 | page << 16
+    reg   [9:0] n_pgmcnt = 0;
+    reg   [3:0] nand_idx = 0;
+    reg  [15:0] nand_ctrl = 0;
+    reg  [23:0] nand_address = 0;         // MAME m_nand_address: column | row << 8 | page << 16
 
     wire [16:0] nand_pages   = nand_big ? 17'd65536 : 17'd32768;
     wire [27:0] chip_bytes   = nand_big ? 28'h2100000 : 28'h1080000;
@@ -290,23 +293,23 @@ module s10_mem (
     // =====================================================================================================
     // MEM(M) state: bank window + Intel 28F640J5 command interface
     // =====================================================================================================
-    reg   [4:0] bank_idx = '0;
+    reg   [4:0] bank_idx = 0;
     reg         bank_direct = 1'b0;        // MAME m_bank_access_nand_direct
     localparam [2:0] FM_NORMAL = 3'd0, FM_STATUS = 3'd1, FM_ID = 3'd2, FM_WRITE1 = 3'd3, FM_CLEAR1 = 3'd4,
                      FM_SETMASTER = 3'd5, FM_WBUF1 = 3'd6, FM_WBUF2 = 3'd7;
     reg   [2:0] fmode = FM_NORMAL;
     reg   [7:0] fstatus = 8'h80;
     reg         fmaster = 1'b0;
-    reg   [4:0] wb_n = '0, wb_count = '0;
-    reg  [22:0] wb_start = '0;             // word address
+    reg   [4:0] wb_n = 0, wb_count = 0;
+    reg  [22:0] wb_start = 0;             // word address
     reg  [15:0] wb_data [0:15];
-    reg  [25:0] ferase_timer = '0;         // after an erase, status reads 0x80 again after ~1 s (MAME)
+    reg  [25:0] ferase_timer = 0;         // after an erase, status reads 0x80 again after ~1 s (MAME)
 
     // =====================================================================================================
     // Buffer tag
     // =====================================================================================================
     reg         tag_valid = 1'b0;
-    reg  [27:0] tag_base  = '0;            // image byte offset of buffer byte 0
+    reg  [27:0] tag_base  = 0;            // image byte offset of buffer byte 0
 
     // =====================================================================================================
     // CPU-side sequencer (clk)
@@ -317,12 +320,12 @@ module s10_mem (
     reg  [23:0] wq_a [0:3];                // pending CPU writes (writes never stall the CPU)
     reg  [31:0] wq_d [0:3];
     reg   [3:0] wq_m [0:3];
-    reg   [2:0] wq_wp = '0, wq_rp = '0;
+    reg   [2:0] wq_wp = 0, wq_rp = 0;
     wire        wq_empty = (wq_wp == wq_rp);
 
     reg         rd_pend = 1'b0;            // a CPU read is outstanding (stalls the bus)
-    reg  [23:0] rd_a = '0;
-    reg   [1:0] rd_size = '0;
+    reg  [23:0] rd_a = 0;
+    reg   [1:0] rd_size = 0;
     assign stall = rd_pend;
 
     localparam [5:0]
@@ -338,18 +341,18 @@ module s10_mem (
 
     reg         t_write = 1'b0;            // current transaction: write
     reg         t_dma = 1'b0;              // current transaction: DMA word
-    reg  [23:0] t_a = '0;
-    reg  [31:0] t_d = '0;
-    reg   [3:0] t_m = '0;
-    reg   [1:0] t_sz = '0;
+    reg  [23:0] t_a = 0;
+    reg  [31:0] t_d = 0;
+    reg   [3:0] t_m = 0;
+    reg   [1:0] t_sz = 0;
     reg         t_h = 1'b0;                // current half: 0 = addr+0, 1 = addr+2
-    reg  [31:0] t_res = '0;
-    reg  [15:0] h_val = '0;                // result of the current 16-bit handler
+    reg  [31:0] t_res = 0;
+    reg  [15:0] h_val = 0;                // result of the current 16-bit handler
     reg         nb_second = 1'b0;          // NAND: second byte of the 16-bit read
-    reg  [15:0] nb_word = '0;
-    reg  [27:0] want = '0;                 // image byte offset wanted from the buffer
+    reg  [15:0] nb_word = 0;
+    reg  [27:0] want = 0;                 // image byte offset wanted from the buffer
     reg         win_unscr = 1'b0;          // MEM(M): window word goes through descramble/decrypt
-    reg   [7:0] w_lo = '0;
+    reg   [7:0] w_lo = 0;
 
     wire [23:0] t_ha   = {t_a[23:2], t_h, 1'b0};
     wire        t_hsel = t_write ? (t_h ? (t_m[3:2] != 2'b00) : (t_m[1:0] != 2'b00))
@@ -366,7 +369,7 @@ module s10_mem (
                                               : 28'h800000 + {2'b00, dbank, win_off, 1'b0};
 
     // DMA words (on demand, one at a time: each word advances the NAND pointer by four bytes)
-    reg  [31:0] dq_word = '0;
+    reg  [31:0] dq_word = 0;
     reg         dq_full = 1'b0;
     reg         dma_on  = 1'b0;
     assign rdma_valid = dq_full;
@@ -375,7 +378,7 @@ module s10_mem (
     // nvram upload / autosave
     reg         up_busy = 1'b0;
     assign up_wait = up_busy;
-    reg  [26:0] save_timer = '0;
+    reg  [26:0] save_timer = 0;
     reg         dirty = 1'b0;
 
     task automatic start_job(input [1:0] ty, input [27:0] a, input [13:0] beats, input [5:0] ret);
@@ -399,7 +402,7 @@ module s10_mem (
         cr_deact_p <= 1'b0;
         cr_step    <= 1'b0;
         save_req   <= 1'b0;
-        rdata      <= '0;
+        rdata      <= 0;
 
         // ---- bus capture (any state)
         if (wr && mine_w) begin
@@ -428,18 +431,18 @@ module s10_mem (
 
         if (reset) begin
             st <= S_IDLE; rd_pend <= 1'b0; wq_rp <= wq_wp; job_req <= 1'b0; tag_valid <= 1'b0;
-            bank_idx <= '0; bank_direct <= 1'b0; fmode <= FM_NORMAL; fstatus <= 8'h80; fmaster <= 1'b0;
-            nand_idx <= '0; nand_ctrl <= '0; nand_address <= '0; dma_on <= 1'b0; dq_full <= 1'b0;
+            bank_idx <= 0; bank_direct <= 1'b0; fmode <= FM_NORMAL; fstatus <= 8'h80; fmaster <= 1'b0;
+            nand_idx <= 0; nand_ctrl <= 0; nand_address <= 0; dma_on <= 1'b0; dq_full <= 1'b0;
             up_busy <= 1'b0; sram_req <= 1'b0;
             for (int c = 0; c < 16; c++) begin
-                n_mode[c] <= NM_INIT; n_pmode[c] <= PM_A; n_page[c] <= '0; n_byte[c] <= '0; n_aload[c] <= '0;
+                n_mode[c] <= NM_INIT; n_pmode[c] <= PM_A; n_page[c] <= 0; n_byte[c] <= 0; n_aload[c] <= 0;
             end
         end else begin
             case (st)
                 // ======================================================================================= idle
                 S_IDLE: begin
                     t_h   <= 1'b0;
-                    t_res <= '0;
+                    t_res <= 0;
                     if (up_active && up_rd) begin
                         up_busy <= 1'b1;
                         want    <= save_base + {1'b0, up_addr};
@@ -637,10 +640,10 @@ module s10_mem (
                                 24'h410000: if (t_b0 && chip_present) begin      // command (MAME nand_device::command_w)
                                     case (t_d16[7:0])
                                         8'hFF: begin n_mode[nand_idx] <= NM_INIT; n_pmode[nand_idx] <= PM_A; end
-                                        8'h00: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_A; n_aload[nand_idx] <= '0; end
-                                        8'h01: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_B; n_aload[nand_idx] <= '0; end
-                                        8'h50: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_C; n_aload[nand_idx] <= '0; end
-                                        8'h80: begin n_mode[nand_idx] <= NM_PROGRAM; n_aload[nand_idx] <= '0; n_pgmcnt <= '0; pm_written <= '0; end
+                                        8'h00: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_A; n_aload[nand_idx] <= 0; end
+                                        8'h01: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_B; n_aload[nand_idx] <= 0; end
+                                        8'h50: begin n_mode[nand_idx] <= NM_READ; n_pmode[nand_idx] <= PM_C; n_aload[nand_idx] <= 0; end
+                                        8'h80: begin n_mode[nand_idx] <= NM_PROGRAM; n_aload[nand_idx] <= 0; n_pgmcnt <= 0; pm_written <= 0; end
                                         8'h10, 8'h15: begin
                                             n_mode[nand_idx] <= NM_INIT;
                                             if (cur_mode == NM_PROGRAM && {1'b0, cur_page} < nand_pages) begin
@@ -649,7 +652,7 @@ module s10_mem (
                                                 start_job(J_FETCH, cur_pagebase, 14'd66, S_PGMWB);
                                             end
                                         end
-                                        8'h60: begin n_mode[nand_idx] <= NM_ERASE; n_page[nand_idx] <= '0; n_aload[nand_idx] <= '0; end
+                                        8'h60: begin n_mode[nand_idx] <= NM_ERASE; n_page[nand_idx] <= 0; n_aload[nand_idx] <= 0; end
                                         8'hD0: begin
                                             n_mode[nand_idx] <= NM_INIT;
                                             if (cur_mode == NM_ERASE) begin
@@ -659,7 +662,7 @@ module s10_mem (
                                             end
                                         end
                                         8'h70: n_mode[nand_idx] <= NM_STATUS;
-                                        8'h90: begin n_mode[nand_idx] <= NM_ID; n_aload[nand_idx] <= '0; end
+                                        8'h90: begin n_mode[nand_idx] <= NM_ID; n_aload[nand_idx] <= 0; end
                                         default: n_mode[nand_idx] <= NM_INIT;
                                     endcase
                                 end
@@ -670,7 +673,7 @@ module s10_mem (
                                     if (chip_present) case (cur_mode)
                                         NM_READ, NM_PROGRAM: begin
                                             if (cur_aload == 2'd0) begin
-                                                n_page[nand_idx] <= '0;
+                                                n_page[nand_idx] <= 0;
                                                 case (cur_pmode)
                                                     PM_A:    n_byte[nand_idx] <= {2'b00, t_d16[7:0]};
                                                     PM_B:    begin n_byte[nand_idx] <= {2'b01, t_d16[7:0]}; n_pmode[nand_idx] <= PM_A; end
@@ -756,7 +759,7 @@ module s10_mem (
                         end
                         FM_WBUF1: begin                        // write-buffer word count
                             wb_n     <= (t_d16 > 16'd15) ? 5'd16 : t_d16[4:0] + 1'd1;
-                            wb_count <= '0;
+                            wb_count <= 0;
                             fstatus  <= 8'h80;
                             fmode    <= FM_WBUF2;
                         end
@@ -775,7 +778,7 @@ module s10_mem (
                                 if (t_d16[7:0] == 8'hD0) begin
                                     fstatus  <= 8'h80;
                                     mark_dirty();
-                                    wb_count <= '0;
+                                    wb_count <= 0;
                                     st       <= S_WBCOMMIT;
                                 end else fstatus <= 8'h30;
                             end
@@ -811,7 +814,4 @@ module s10_mem (
         end
     end
 
-    // the plain word for the cipher word presented with cr_step (state before the step), captured in that cycle
-    reg [15:0] cr_plain_q = '0;
-    always @(posedge clk) if (cr_step) cr_plain_q <= cr_plain;
 endmodule
