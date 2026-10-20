@@ -1121,12 +1121,12 @@ begin
                         -- destroyed, and Tekken sends GP1(01) every frame while the (slower) FPGA
                         -- renderer is still busy. Flushing the fifo + killing the drawer here
                         -- discards nearly every queued draw -> almost no VRAM writes -> noise.
-                        -- Keep the destructive semantics for retail PSX (ridge racer needs the
-                        -- mid-rectangle cancel), skip them for gputype1.
-                        if (gpuType1 = '0') then
-                           fifoIn_reset <= '1';
-                           drawer_reset <= '1';
-                        end if;
+                        -- Namco System 10 (CXD8561CQ): the same. Gamshara / Kono e Tako send GP1(01) at
+                        -- every vblank of their 480i single-buffer screens; the destructive flush cut the
+                        -- frame's queued polygons -> flashing / missing title logo fill, text and the
+                        -- character-select panel, line flicker in play. MAME (all System 10 games correct)
+                        -- never discards queued work here, so neither does this core. (The retail-PSX
+                        -- flush - ridge racer's mid-rectangle cancel - is not a System 10 requirement.)
                         -- todo: must reset drawing units to idle? -> ridge racer triggers that in the middle of a rectangle command clearing the screen
                         -- reset CLUT cache?
                         

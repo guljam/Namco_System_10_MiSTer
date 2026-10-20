@@ -22,7 +22,7 @@
     <players>2</players>
     <joystick>4-way</joystick>
     <rotation>horizontal</rotation>
-    <buttons names="Drill,Start,Coin,Test,Service,Pause" default="A,Start,Select,L,R,R3"/>
+    <buttons names="Drill,-,-,-,-,-,Start,Coin,Test,Service,Pause" default="A,B,X,Y,R2,L2,Start,Select,L,R,R3"/>
 
     <switches default="FF">
         <dip name="SW1-1" bits="7" ids="On,Off"/>

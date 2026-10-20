@@ -70,7 +70,8 @@ architecture sim of tb_board is
          t2_nl_ac : out std_logic_vector(63 downto 0); t2_nl_ap : out std_logic_vector(63 downto 0);
          t2_nl_bc : out std_logic_vector(63 downto 0); t2_nl_bp : out std_logic_vector(63 downto 0);
          t2_nl_out : out std_logic_vector(15 downto 0); record_ok : out std_logic;
-         nl_table : out std_logic; light_gun : out std_logic; nl_bits : out std_logic_vector(20 downto 0);
+         nl_table : out std_logic; light_gun : out std_logic; cdrom : out std_logic; exio_mcu : out std_logic;
+         nl_bits : out std_logic_vector(20 downto 0);
          dl_req : out std_logic; dl_addr : out std_logic_vector(26 downto 0); dl_data : out std_logic_vector(31 downto 0);
          dl_done : in std_logic; fill_start : out std_logic; fill_base : out std_logic_vector(26 downto 0);
          fill_words : out std_logic_vector(20 downto 0); fill_value : out std_logic_vector(31 downto 0);
@@ -100,6 +101,7 @@ architecture sim of tb_board is
    signal stall : std_logic;
 
    signal d_req, d_we, d_rd : std_logic;
+   signal rd_dbg : std_logic := '0';
    signal d_ack : std_logic := '0';
    signal d_burst, d_be : std_logic_vector(7 downto 0);
    signal d_addr : std_logic_vector(27 downto 0);
@@ -212,6 +214,25 @@ begin
       end if;
    end process;
 
+
+   -- debug: DDR3 writes to the start of NAND0 page 0x20 (image 0x4200)
+   process (clk2x)
+   begin
+      if rising_edge(clk2x) then
+         if d_req = '1' and d_we = '1' and d_ack = '1' and unsigned(d_addr) >= x"2004200" and unsigned(d_addr) < x"2004240" then
+            report "DDRW " & to_hstring(d_addr) & " " & to_hstring(d_din) & " be " & to_hstring(d_be);
+         end if;
+         if d_req = '1' and d_rd = '1' and d_ack = '1' and unsigned(d_addr) >= x"2004200" and unsigned(d_addr) < x"2004210" then
+            report "DDRR req " & to_hstring(d_addr) & " burst " & to_hstring(d_burst);
+            rd_dbg <= '1';
+         elsif d_req = '1' and d_rd = '1' and d_ack = '1' then
+            rd_dbg <= '0';
+         end if;
+         if DDRAM_DOUT_READY = '1' and rd_dbg = '1' then
+            report "DDRR data " & to_hstring(DDRAM_DOUT);
+         end if;
+      end if;
+   end process;
    ildr : s10_loader
       port map (
          clk => clk1x, clk2 => clk2x,
@@ -222,7 +243,7 @@ begin
          t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
          t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
          t2_nl_out => b_t2_nl_out, record_ok => b_record_ok,
-         nl_table => b_nl_table, light_gun => b_light_gun, nl_bits => b_nl_bits,
+         nl_table => b_nl_table, light_gun => b_light_gun, cdrom => open, exio_mcu => open, nl_bits => b_nl_bits,
          dl_req => open, dl_addr => open, dl_data => open, dl_done => '0',
          fill_start => open, fill_base => open, fill_words => open, fill_value => open, fill_busy => '0',
          ddr_own => open, ddr_we => open, ddr_addr => open, ddr_din => open, ddr_be => open, ddr_busy => '0'

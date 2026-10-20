@@ -23,7 +23,7 @@
     <players>2</players>
     <joystick>lightgun</joystick>
     <rotation>horizontal</rotation>
-    <buttons names="Trigger,Start,Coin,Test,Service,Pause" default="A,Start,Select,L,R,R3"/>
+    <buttons names="Trigger,-,-,-,-,-,Start,Coin,Test,Service,Pause" default="A,B,X,Y,R2,L2,Start,Select,L,R,R3"/>
 
     <switches default="FF">
         <dip name="Service Mode" bits="7" ids="On,Off"/>

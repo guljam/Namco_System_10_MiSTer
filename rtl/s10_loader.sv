@@ -41,6 +41,8 @@ module s10_loader #(
     output wire  [7:0]  exio_ident,
     output wire         nl_table,           // record byte 27 bit 0: type-2 nonlinear term from the bit table
     output wire         light_gun,          // record byte 27 bit 1: light guns on the EXIO board
+    output wire         cdrom,              // record byte 27 bit 2: ATAPI CD-ROM drive (Taiko no Tatsujin)
+    output wire         exio_mcu,           // record byte 27 bit 3: EXIO board with microcontroller (high-level)
     output wire [20:0]  nl_bits,            // record bytes 460-463: table length in bits
     output wire [27:0]  save_base,
     output wire [1023:0] t2_emask,
@@ -84,6 +86,8 @@ module s10_loader #(
     assign exio_ident  = rec[8*26 +: 8];
     assign nl_table    = rec[8*27];
     assign light_gun   = rec[8*27 + 1];
+    assign cdrom       = rec[8*27 + 2];
+    assign exio_mcu    = rec[8*27 + 3];
     assign save_base   = rec[8*28 +: 28];
     assign nl_bits     = rec[8*460 +: 21];
     assign t2_emask    = rec[8*32  +: 1024];
@@ -172,10 +176,9 @@ module s10_loader #(
 
         if (ioctl_download && ioctl_wr) begin
             // ---- board record
-            if (rec_dl && ioctl_addr < RECB) begin
-                rec[8*ioctl_addr +: 8] <= ioctl_dout[7:0];
-                if (ioctl_addr + 1 < RECB) rec[8*(ioctl_addr + 1) +: 8] <= ioctl_dout[15:8];
-            end
+            // the record arrives in order, one 16-bit word per ioctl_wr: shift it in (byte 0 ends at the
+            // bottom after RECB/2 words) instead of a byte-addressed write (a 464-way decoder)
+            if (rec_dl && ioctl_addr < RECB) rec <= {ioctl_dout, rec[8*RECB-1:16]};
 
             // ---- BIOS
             if (bios_dl) begin

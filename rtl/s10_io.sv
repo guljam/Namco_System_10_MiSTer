@@ -38,6 +38,7 @@ module s10_io #(
     input  wire  [7:0] exio_ident,      // 0xFF = no expansion board
     input  wire  [8:0] gun_x0, gun_y0,  // light-gun positions (MAME EXIO_LIGHTGUN ports: X 0..319, Y 0..239)
     input  wire  [8:0] gun_x1, gun_y1,
+    input  wire        cd_intrq,         // ATAPI INTRQ (level): status bit 2 + IRQ10 (MAME cdrom_interrupt)
 
     output reg         irq10 = 1'b0     // IRQ10 request (one clock pulse)
 );
@@ -45,6 +46,7 @@ module s10_io #(
     localparam int TICK = CLK_HZ / 100;
     reg [21:0] tcnt = 0;
     reg  [3:0] intst = 0;
+    reg        cd_q = 1'b0;
 
     // ------------------------------------------------------------------ EXIO ident shifter
     reg  [2:0] exio_bit  = 3'd7;
@@ -141,6 +143,10 @@ module s10_io #(
                 intst[3] <= 1'b1;
                 irq10    <= 1'b1;
             end else tcnt <= tcnt + 1'd1;
+            // CD-ROM interrupt: bit 2 follows INTRQ (set on assert, cleared on deassert or ack), IRQ10 on assert
+            cd_q <= cd_intrq;
+            if (cd_intrq && !cd_q) begin intst[2] <= 1'b1; irq10 <= 1'b1; end
+            if (!cd_intrq && cd_q) intst[2] <= 1'b0;
 
             if (rd && sel) begin
                 rdata <= {rd16(a_hi), rd16(a_lo)};

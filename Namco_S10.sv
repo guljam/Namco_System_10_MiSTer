@@ -378,6 +378,8 @@ parameter CONF_STR = {
 	"O[3:2],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%;",
 	"O[13:12],Orientation,Horizontal,Vertical CW,Vertical CCW,Flipped;",
 	"-;",
+	"H3SC0,BINISO,Mount CD;",
+	"H3-;",
 	"P1,Video & Audio;",
 	"P1-;",
 	"P1O[33:32],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
@@ -399,8 +401,8 @@ parameter CONF_STR = {
 	"P3O[64],Pause when OSD open,Off,On;",
 	"-;",
 	"R0,Reset;",
-	"J1,Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3,Button 4,Button 5,Button 6;",
-	"jn,A,Start,Select,L,R,R3,B,X,Y,R2,L2;",
+	"J1,Button 1,Button 2,Button 3,Button 4,Button 5,Button 6,Start,Coin,Test,Service,Pause;",
+	"jn,A,B,X,Y,R2,L2,Start,Select,L,R,R3;",
 	"V,v",`BUILD_DATE
 };
 
@@ -409,15 +411,17 @@ wire [127:0] status;
 // Bit 0 hides the Light Gun OSD page (H0 prefix) for every game whose MRA does
 // not declare itself a gun game — light-gun support must not be offered to
 // games that don't natively have it.
-wire        b_light_gun;
-wire [15:0] status_menumask = {13'd0, ~b_light_gun, ~status[96], 1'b0};   // H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only
+wire        b_light_gun, b_cdrom, b_exio_mcu;
+// H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only; H3: Mount CD, CD games only
+wire [15:0] status_menumask = {12'd0, ~b_cdrom, ~b_light_gun, ~status[96], 1'b0};
 wire        forced_scandoubler;
-reg  [31:0] sd_lba0 = 0;
-reg  [31:0] sd_lba1;
-reg  [ 6:0] sd_lba2;
-reg  [ 6:0] sd_lba3;
-reg   [3:0] sd_rd;
-reg   [3:0] sd_wr;
+wire [31:0] sd_lba0;                   // slot 0: CD-ROM image (s10_atapi)
+wire [31:0] sd_lba1 = 0;
+wire [ 6:0] sd_lba2 = 0;
+wire [ 6:0] sd_lba3 = 0;
+wire        cd_sd_rd;
+wire  [3:0] sd_rd = {3'b000, cd_sd_rd};
+wire  [3:0] sd_wr = 4'b0000;
 wire  [3:0] sd_ack;
 wire  [8:0] sd_buff_addr;
 wire [15:0] sd_buff_dout;
@@ -557,10 +561,6 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 
 assign joy = joy_unmod[16] ? 20'b0 : joy_unmod;
 
-assign sd_rd[0] = 0;
-assign sd_wr[0] = 0;
-
-assign sd_wr[1] = 0;
 
 wire [35:0] EXT_BUS;
 wire        heartbeat;
@@ -657,6 +657,8 @@ s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000), .NL_OFF(NL_OFF)) s
 	.t2_nl_out     (b_t2_nl_out),
 	.nl_table      (b_nl_table),
 	.light_gun     (b_light_gun),
+	.cdrom         (b_cdrom),
+	.exio_mcu      (b_exio_mcu),
 	.nl_bits       (b_nl_bits),
 	.record_ok     (b_record_ok),
 	.dl_req        (ld_dl_req),
@@ -862,9 +864,9 @@ always @(posedge clk_1x) begin
       paused <= 1;
    end
 
-   // pause from button: joy[9] = Pause (6th entry of the MRA/J1 button list)
-   buttonpause_1 <= joy[9];
-   if (joy[9] & ~buttonpause_1) begin
+   // pause from button: joy[14] = Pause (11th entry of the MRA/J1 button list)
+   buttonpause_1 <= joy[14];
+   if (joy[14] & ~buttonpause_1) begin
       button_paused <= ~button_paused;
    end
    if (button_paused) begin
@@ -940,24 +942,24 @@ wire [31:0] s10_sram_wdata, s10_sram_rdata;
 wire        s10_up_wait;
 
 // JAMMA inputs, MAME namcos10 IN1 layout (active low). joy follows the MRA <buttons> order:
-// [0]R [1]L [2]D [3]U [4]Button 1 [5]Start [6]Coin [7]Test [8]Service [9]Pause [10..14]Buttons 2-6
+// [0]R [1]L [2]D [3]U [4..9]Buttons 1-6 [10]Start [11]Coin [12]Test [13]Service [14]Pause
 reg  test_p1 = 0, test_p2 = 0, test_sw = 0;
 always @(posedge clk_1x) begin                       // MAME: TEST is a slide switch (PORT_TOGGLE)
-	test_p1 <= joy[7];
-	test_p2 <= joy2[7];
-	if ((joy[7] & ~test_p1) | (joy2[7] & ~test_p2)) test_sw <= ~test_sw;
+	test_p1 <= joy[12];
+	test_p2 <= joy2[12];
+	if ((joy[12] & ~test_p1) | (joy2[12] & ~test_p2)) test_sw <= ~test_sw;
 	if (reset_or) test_sw <= 1'b0;
 end
-wire [7:0]  in_p1 = {joy[5],  joy[11],  joy[10],  joy[4],  joy[3],  joy[2],  joy[1],  joy[0]};
-wire [7:0]  in_p2 = {joy2[5], joy2[11], joy2[10], joy2[4], joy2[3], joy2[2], joy2[1], joy2[0]};
-wire [31:0] s10_in1 = ~{joy[8] | joy2[8],              // b31 SERVICE1
+wire [7:0]  in_p1 = {joy[10],  joy[6],  joy[5],  joy[4],  joy[3],  joy[2],  joy[1],  joy[0]};
+wire [7:0]  in_p2 = {joy2[10], joy2[6], joy2[5], joy2[4], joy2[3], joy2[2], joy2[1], joy2[0]};
+wire [31:0] s10_in1 = ~{joy[13] | joy2[13],            // b31 SERVICE1
                         test_sw,                       // b30 TEST (slide)
-                        joy[6],                        // b29 COIN1
-                        joy2[6],                       // b28 COIN2
+                        joy[11],                       // b29 COIN1
+                        joy2[11],                      // b28 COIN2
                         4'b0000,                       // b27-24 unused
-                        joy2[14], joy2[13], joy2[12],  // b23-21 P2 buttons 6-4
+                        joy2[9], joy2[8], joy2[7],     // b23-21 P2 buttons 6-4
                         1'b0,                          // b20 unused
-                        joy[14], joy[13], joy[12],     // b19-17 P1 buttons 6-4
+                        joy[9], joy[8], joy[7],        // b19-17 P1 buttons 6-4
                         1'b0,                          // b16 unused
                         in_p2, in_p1};
 // DSW1 from the MRA <switches> (ioctl index 254): the byte is MAME's SYSTEM port bits 7-0 (active low,
@@ -972,6 +974,63 @@ wire        h8_illegal = 1'b0;
 // PSX video outputs (the loading-screen generator muxes in front of them, see VIDEO)
 wire psx_hs, psx_vs, psx_hbl, psx_vbl, psx_ce_pix, psx_interlace;
 wire [7:0] psx_r, psx_g, psx_b;
+
+// ATAPI CD-ROM drive (Taiko no Tatsujin): disc image on hps_io slot 0, DMA channel 5 while it has a DMA read
+wire [31:0] s10_cd_rdata, s10_exio_rdata;
+wire        cd_intrq, cd_dma_pending, cd_rdma_valid;
+wire [31:0] cd_rdma_data;
+reg         cd_dma_sel = 1'b0;            // the current channel-5 transfer belongs to the drive (MAME m_is_cdrom_dma)
+always @(posedge clk_1x) if (s12_rdma_start) cd_dma_sel <= cd_dma_pending;
+wire        cd_dma_now = s12_rdma_start ? cd_dma_pending : cd_dma_sel;
+wire        mem_rdma_valid;
+wire [31:0] mem_rdma_data;
+assign s12_rdma_valid = cd_dma_now ? cd_rdma_valid : mem_rdma_valid;
+assign s12_rdma_data  = cd_dma_now ? cd_rdma_data  : mem_rdma_data;
+
+s10_atapi s10_atapi
+(
+	.clk          (clk_1x),
+	.reset        (reset),
+	.enable       (b_cdrom),
+	.addr         (s10_addr),
+	.wdata        (s10_wdata),
+	.wmask        (s10_wmask),
+	.size         (s10_size),
+	.rd           (s10_rd),
+	.wr           (s10_wr),
+	.rdata        (s10_cd_rdata),
+	.intrq        (cd_intrq),
+	.dma_pending  (cd_dma_pending),
+	.rdma_valid   (cd_rdma_valid),
+	.rdma_pop     (s12_rdma_pop & cd_dma_now),
+	.rdma_data    (cd_rdma_data),
+	.sd_lba       (sd_lba0),
+	.sd_rd        (cd_sd_rd),
+	.sd_ack       (sd_ack[0]),
+	.sd_buff_addr (sd_buff_addr),
+	.sd_buff_dout (sd_buff_dout),
+	.sd_buff_wr   (sd_buff_wr),
+	.img_mounted  (img_mounted[0]),
+	.img_size     (img_size)
+);
+
+// EXIO board with microcontroller (Taiko no Tatsujin drums), high-level. Drum zones from Buttons 2-5:
+// Left Don = left surface, Right Don = right surface, Left Ka = left rim, Right Ka = right rim.
+// Order = EXIO_ANALOG1-8: P1 right rim, P1 right surface, P1 left surface, P1 left rim, then P2.
+s10_exio s10_exio
+(
+	.clk    (clk_1x),
+	.reset  (reset),
+	.enable (b_exio_mcu),
+	.addr   (s10_addr),
+	.wdata  (s10_wdata),
+	.wmask  (s10_wmask),
+	.size   (s10_size),
+	.rd     (s10_rd),
+	.wr     (s10_wr),
+	.rdata  (s10_exio_rdata),
+	.drum   ({joy2[7], joy2[5], joy2[6], joy2[8], joy[7], joy[5], joy[6], joy[8]})
+);
 
 // EXIO(G) light guns (Point Blank 3): aim from the MiSTer gun / analog stick or the mouse, trigger = button 1
 wire [7:0] gun_p1x, gun_p1y, gun_p2x, gun_p2y;
@@ -1011,6 +1070,7 @@ s10_io s10_io
 	.gun_y0     (gun_y0),
 	.gun_x1     (gun_x1),
 	.gun_y1     (gun_y1),
+	.cd_intrq   (cd_intrq),
 	.irq10      (s10_irq10)
 );
 
@@ -1047,10 +1107,10 @@ s10_mem s10_mem
 	.wr             (s10_wr),
 	.rdata          (s10_mem_rdata),
 	.stall          (s10_stall),
-	.rdma_start     (s12_rdma_start),
-	.rdma_valid     (s12_rdma_valid),
-	.rdma_pop       (s12_rdma_pop),
-	.rdma_data      (s12_rdma_data),
+	.rdma_start     (s12_rdma_start & ~cd_dma_pending),
+	.rdma_valid     (mem_rdma_valid),
+	.rdma_pop       (s12_rdma_pop & ~cd_dma_now),
+	.rdma_data      (mem_rdma_data),
 	.sram_req       (s10_sram_req),
 	.sram_addr      (s10_sram_addr),
 	.sram_rnw       (s10_sram_rnw),
@@ -1387,7 +1447,7 @@ psx
    .s10_size       (s10_size),
    .s10_rd         (s10_rd),
    .s10_wr         (s10_wr),
-   .s10_rdata      (s10_io_rdata | s10_mem_rdata),
+   .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata),
    .s10_stall      (s10_stall),
    .s10_irq10      (s10_irq10),
    .s10_exio       (b_exio_ident != 8'hFF),

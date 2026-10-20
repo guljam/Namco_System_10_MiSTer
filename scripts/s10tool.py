@@ -39,15 +39,21 @@ BOARDS = {
         perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x1, 0x0, 0x2, 0x3),
         xor=0xAAAA, t2=ns10crypt.PTBLANK3, save_base=0x4200, save_size=0x4200,
         exio=0x32, gun=True, category="Shooter", players=2,
-        buttons=("Trigger,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3"), joystick="lightgun",
+        buttons=("Trigger,-,-,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"), joystick="lightgun",
         dips=[("Service Mode", "7", None, "On,Off")],
+    ),
+    "taiko_family": dict(
+        board="N", crypt=2, nand_big=False, xor=0xAAAA, save_base=0x4200, save_size=0x4200,
+        exio=0x30, exio_mcu=True, cdrom=True, category="Rhythm", joystick="2-way vertical",
+        # Enter / Select Up-Down on IN1; drum zones on the EXIO ADC (P1 and P2 from each player's pad)
+        buttons=("Enter,Left Don,Right Don,Left Ka,Right Ka,-,-,Coin,Test,Service,Pause", "A,B,X,L,R,Y,Start,Select,L2,R2,R3"),
     ),
     "gamshara_family": dict(
         board="N", crypt=2, nand_big=False,
         perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x0, 0x1, 0x2, 0x3),
         xor=0xAAAA, t2=ns10crypt.GAMSHARA, save_base=0x4200, save_size=0x4200,
         manufacturer="Mitchell", category="Action", joystick="8-way",
-        buttons=("Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3", "A,Start,Select,L,R,R3,B,X"),
+        buttons=("Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
         # MAME: the region is a 7-bit code on SW1:8-2, only 0x6E selects World (English); read at boot
         dips=[("Region", "0,6", "110,127", "World,Japan"), ("Service Mode", "7", None, "On,Off")],
         dip_default=0xEE,
@@ -82,7 +88,7 @@ GAMES = {
                       perm=(0xe, 0xf, 0xc, 0xd, 0x8, 0x9, 0xb, 0xa, 0x5, 0x4, 0x7, 0x6, 0x0, 0x1, 0x3, 0x2),
                       xor=0xAAAA, t2=ns10crypt.KONOTAKO, save_base=0x4200, save_size=0x4200,
                       manufacturer="Mitchell", category="Puzzle", joystick="8-way",
-                      buttons=("Button 1,Start,Coin,Test,Service,Pause,Button 2", "A,Start,Select,L,R,R3,B"),
+                      buttons=("Button 1,Button 2,-,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
                       dips=[("Region", "0", None, "Export (Cristaltec),Japan")] +
                            [(f"SW1-{n}", str(8 - n), None, "On,Off") for n in range(1, 8)]),
     # ---- MEM(N) games that need no new hardware (parameters from MAME via mame_s10_import.py); untested
@@ -91,40 +97,54 @@ GAMES = {
                       nands=[("10011.8e", "c581bca7"), ("10011.8d", "7fb4a3fe"), ("10011.7e", "31bfc843"), ("10011.7d", "15d83649")],
                       perm=(0x8, 0xa, 0x6, 0x5, 0x7, 0xe, 0x4, 0xf, 0xd, 0x9, 0x1, 0x0, 0x2, 0xb, 0xc, 0x3),
                       xor=0xAAAA, t2=ns10crypt.GJSPACE, save_base=0x4200, save_size=0x4200,
-                      manufacturer="Namco / Metro", category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X'),
+                      manufacturer="Namco / Metro", category="Puzzle", joystick="8-way", buttons=('Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause', 'A,B,X,Y,R2,L2,Start,Select,L,R,R3'),
                       dips=[(f"SW1-{k}", str(8 - k), None, "On,Off") for k in range(2, 9)] + [("Service Mode", "7", None, "On,Off")]),
     "knpuzzle":  dict(name="Kotoba no Puzzle Mojipittan (Japan, KPM1 Ver.A)", parent=None, region="Japan", year=2001,
                       board="N", crypt=2, nand_big=False,
                       nands=[("kpm1vera_0.8e", "4b4255da"), ("kpm1vera_1.8d", "644595a6"), ("kpm1vera_2.7e", "6bf164e5")],
                       perm=(0xe, 0xf, 0xc, 0xd, 0xa, 0x8, 0xb, 0x9, 0x4, 0x5, 0x6, 0x7, 0x1, 0x3, 0x0, 0x2),
                       xor=0xAAAA, t2=ns10crypt.KNPUZZLE, save_base=0x4200, save_size=0x4200,
-                      category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+                      category="Puzzle", joystick="8-way", buttons=('Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause', 'A,B,X,Y,R2,L2,Start,Select,L,R,R3')),
     "chocovdr":  dict(name="Uchuu Daisakusen: Chocovader Contactee (Japan, CVC1 Ver.A)", parent=None, region="Japan", year=2002,
                       board="N", crypt=2, nand_big=False,
                       nands=[("0.8e", "330d86d3"), ("1.8d", "4aecd6fc"), ("2.7e", "ac212e5a"), ("3.7d", "907d3d15"), ("4.6e", "1ed957dd")],
                       perm=(0xd, 0xc, 0xe, 0xf, 0x9, 0x8, 0xa, 0xb, 0x4, 0x7, 0x6, 0x5, 0x0, 0x3, 0x2, 0x1),
                       xor=0xAAAA, t2=ns10crypt.CHOCOVDR, save_base=0x4200, save_size=0x4200,
-                      category="Action", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+                      category="Action", joystick="8-way", buttons=('Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause', 'A,B,X,Y,R2,L2,Start,Select,L,R,R3')),
     "panikuru":  dict(name="Panikuru Panekuru (Japan, PPA1 Ver.A)", parent=None, region="Japan", year=2002,
                       board="N", crypt=2, nand_big=False,
                       nands=[("0.8e", "a68b0965"), ("1.8d", "18e5135d"), ("2.7e", "cd3b25e0")],
                       perm=(0xe, 0xc, 0xf, 0xd, 0x8, 0x9, 0xa, 0xb, 0x4, 0x7, 0x6, 0x5, 0x1, 0x0, 0x3, 0x2),
                       xor=0xAAAA, t2=ns10crypt.PANIKURU, save_base=0x4200, save_size=0x4200,
-                      category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+                      category="Puzzle", joystick="8-way", buttons=('Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause', 'A,B,X,Y,R2,L2,Start,Select,L,R,R3')),
     "startrgn":  dict(name="Star Trigon (Japan, STT1 Ver.A)", parent=None, region="Japan", year=2002,
                       board="N", crypt=2, nand_big=False,
                       nands=[("stt1a_0.bin", "1e090644"), ("stt1a_1.bin", "aa527694")],
                       perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0xb, 0x8, 0xa, 0x4, 0x5, 0x6, 0x7, 0x0, 0x3, 0x2, 0x1),
                       xor=0xAAAA, t2=ns10crypt.STARTRGN, save_base=0x4200, save_size=0x4200,
                       category="Puzzle", joystick="8-way", players=1,
-                      buttons=("Button 1,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")),
+                      buttons=("Button 1,-,-,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3")),
+    # ---- Taiko no Tatsujin: MEM(N) 3 x K9F2808U0B, EXIO board with MCU (drums, high-level), ATAPI CD-ROM (the disc
+    # image is mounted from the OSD: chdman extractcd output, .bin/.iso)
+    "taiko2":    dict(name="Taiko no Tatsujin 2 (Japan, TK21 Ver.C)", parent=None, region="Japan", year=2001,
+                      family="taiko_family", t2=ns10crypt.TAIKO2, disc="nm-002",
+                      nands=[("tk21verc_0.8e", "f3842791"), ("tk21verc_1.8d", "e294f460"), ("tk21verc_2.7e", "f1dbe387")],
+                      perm=(0xc, 0xd, 0xe, 0xf, 0x9, 0x8, 0xb, 0xa, 0x6, 0x4, 0x7, 0x5, 0x2, 0x3, 0x0, 0x1)),
+    "taiko4":    dict(name="Taiko no Tatsujin 4 (Japan, TK41 Ver.A)", parent=None, region="Japan", year=2003,
+                      family="taiko_family", t2=ns10crypt.TAIKO4, disc="tk-41",
+                      nands=[("tk41vera_0.8e", "6dc209b1"), ("tk41vera_1.8d", "0d1731d8"), ("tk41vera_2.7e", "6fc63af0")],
+                      perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0x8, 0xb, 0xa, 0x5, 0x4, 0x6, 0x7, 0x2, 0x3, 0x0, 0x1)),
+    "taiko6":    dict(name="Taiko no Tatsujin 6 (Japan, TK61 Ver.A)", parent=None, region="Japan", year=2004,
+                      family="taiko_family", t2=ns10crypt.TAIKO6, disc="tk-6",
+                      nands=[("tk61vera_0.8e", "a07936c6"), ("tk61vera_1.8d", "288fb1aa"), ("tk61vera_2.7e", "550bb6a1")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0x9, 0xb, 0x8, 0xa, 0x5, 0x4, 0x7, 0x6, 0x2, 0x1, 0x0, 0x3)),
 }
 MAIN = {"mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
         "ptblank3": "ptblank3", "gunbalina": "ptblank3", "gamshara": "gamshara", "gamsharao": "gamshara",
-        "konotako": "konotako", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
+        "konotako": "konotako", "taiko2": "taiko2", "taiko4": "taiko4", "taiko6": "taiko6", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
         "panikuru": "panikuru", "startrgn": "startrgn"}
 ALT_DIR = {"mrdrilr2": "_Mr. Driller 2", "ptblank3": "_Point Blank 3", "gamshara": "_Gamshara"}
-BUTTONS = ("Drill,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")
+BUTTONS = ("Drill,-,-,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3")  # J1 order: Buttons 1-6, Start, Coin, Test, Service, Pause
 # DIP switches (MRA <switches>, ioctl index 254): one byte = MAME's SYSTEM port bits 7-0, active low,
 # SW1:1 = bit 7 ... SW1:8 = bit 0. Games without named switches get SW1-1..8.
 GENERIC_DIPS = [(f"SW1-{n}", str(8 - n), None, "On,Off") for n in range(1, 9)]
@@ -152,7 +172,8 @@ def record(setname):
     r[10:26] = bytes(g["perm"])
     r[26] = g.get("exio", 0xFF)                     # EXIO ident (0xFF = no expansion board)
     t2 = g.get("t2")
-    r[27] = (1 if t2 and "table" in t2 else 0) | (2 if g.get("gun") else 0)
+    r[27] = ((1 if t2 and "table" in t2 else 0) | (2 if g.get("gun") else 0) |
+             (4 if g.get("cdrom") else 0) | (8 if g.get("exio_mcu") else 0))
     struct.pack_into("<I", r, 28, g["save_base"])
     if t2:
         for j in range(16):
@@ -183,6 +204,8 @@ def mra_text(setname):
          "  index 3  MEM(M) data mask ROMs -> DDR3 0x32800000 (fast loading)",
          f"  index 4  type-2 nonlinear bit table -> DDR3 0x{DDR3_IMG + NL_OFF:08X} (Point Blank 3 family)",
          f"  index 9  settings (nvram): image offset 0x{g['save_base']:X}, {g['save_size']} bytes",
+         *([f"  CD-ROM: mount the game disc from the OSD (Mount CD): chdman extractcd -i {g['disc']}.chd -o {g['disc']}.cue",
+            "          and mount the .bin; the core remembers it for this game."] if g.get("cdrom") else []),
          "-->",
          "<misterromdescription>",
          f"    <name>{g['name']}</name>",

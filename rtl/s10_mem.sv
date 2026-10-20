@@ -135,10 +135,10 @@ module s10_mem (
     // =====================================================================================================
     // Buffers (8 byte lanes x 128, clocked by clk2): PAGE (DDR3 data) and PGM (NAND page register)
     // =====================================================================================================
-    reg   [7:0] pg_lane [0:7][0:127];
-    reg   [7:0] pm_lane [0:7][0:127];
-    reg   [7:0] pg_q [0:7];
-    reg   [7:0] pm_q [0:7];
+    wire  [7:0] pg_q [0:7];
+    wire  [7:0] pm_q [0:7];
+    wire [63:0] wb_word;
+    reg   [6:0] e_idx = 0;                // DDR3 engine beat index (declared here: used by the lanes below)
 
     reg         eng_pg_we = 1'b0;          // clk2: DDR3 beat -> PAGE
     reg   [6:0] eng_pg_wi = 0;
@@ -151,14 +151,25 @@ module s10_mem (
     reg   [7:0] pm_wd = 0;
     reg [527:0] pm_written = 0;           // PGM byte written since 0x80 (unwritten bytes program as 0xFF)
 
-    always @(posedge clk2) begin
-        for (int l = 0; l < 8; l++) begin
-            if (eng_pg_we)                      pg_lane[l][eng_pg_wi]   <= eng_pg_wd[8*l +: 8];
-            if (pm_we && pm_wa[2:0] == l[2:0])  pm_lane[l][pm_wa[9:3]]  <= pm_wd;
-            pg_q[l] <= pg_lane[l][eng_rd_own ? eng_ri : fsm_rb[9:3]];
-            pm_q[l] <= pm_lane[l][eng_ri];
+    // one 128-byte RAM pair per byte lane (generate: NVC mis-evaluates a lane test on a for-loop variable)
+    genvar gl;
+    generate
+        for (gl = 0; gl < 8; gl = gl + 1) begin : g_lane
+            reg [7:0] pgl [0:127];
+            reg [7:0] pml [0:127];
+            reg [7:0] pgq = 0, pmq = 0;
+            always @(posedge clk2) begin
+                if (eng_pg_we)                       pgl[eng_pg_wi]  <= eng_pg_wd[8*gl +: 8];
+                if (pm_we && pm_wa[2:0] == 3'(gl))   pml[pm_wa[9:3]] <= pm_wd;
+                pgq <= pgl[eng_rd_own ? eng_ri : fsm_rb[9:3]];
+                pmq <= pml[eng_ri];
+            end
+            assign pg_q[gl] = pgq;
+            assign pm_q[gl] = pmq;
+            // program write-back byte: NAND programming only clears bits; unwritten PGM bytes are 0xFF
+            assign wb_word[8*gl +: 8] = pgq & (pm_written[e_idx * 8 + gl] ? pmq : 8'hFF);
         end
-    end
+    endgenerate
     wire [7:0] fsm_byte = pg_q[fsm_rb[2:0]];   // valid one clk after fsm_rb changes
 
     // =====================================================================================================
@@ -183,7 +194,6 @@ module s10_mem (
     reg   [2:0] est = E_IDLE;
     reg  [13:0] e_left = 0;               // beats still to transfer
     reg   [7:0] e_burst = 0;              // beats left in the current read burst
-    reg   [6:0] e_idx = 0;
     reg  [27:0] e_addr = 0;
     reg         e_acked = 1'b0;
 
@@ -244,11 +254,7 @@ module s10_mem (
                     ddr_burstcnt <= 8'd1;
                     ddr_addr     <= e_addr;
                     case (job_type)
-                        J_WBACK: begin
-                            for (int l = 0; l < 8; l++)
-                                ddr_din[8*l +: 8] <= pg_q[l] & (pm_written[{e_idx, l[2:0]}] ? pm_q[l] : 8'hFF);
-                            ddr_be <= 8'hFF;
-                        end
+                        J_WBACK: begin ddr_din <= wb_word; ddr_be <= 8'hFF; end
                         J_FILL:  begin ddr_din <= {64{1'b1}}; ddr_be <= 8'hFF;   end
                         default: begin ddr_din <= job_d64;    ddr_be <= job_be;  end
                     endcase
@@ -332,11 +338,14 @@ module s10_mem (
     wire mine_w = (addr[23:20] == 4'h3) || (addr[23:20] == 4'h4) || (addr[23:20] == 4'h5) || (addr[23:17] == 7'b1011_010);
     wire mine_r = (addr[23:20] == 4'h4) || (addr[23:20] == 4'h5) || (addr[23:17] == 7'b1011_010);
 
-    reg  [23:0] wq_a [0:3];                // pending CPU writes (writes never stall the CPU)
-    reg  [31:0] wq_d [0:3];
-    reg   [3:0] wq_m [0:3];
-    reg   [2:0] wq_wp = 0, wq_rp = 0;
+    // pending CPU writes (writes never stall the CPU): 64 entries {addr, data, mask} in an MLAB. A NAND page
+    // program is 256 back-to-back data-register writes (Taiko's settings saves); with 4 entries the queue
+    // overflowed whenever the CPU wrote faster than the sequencer (4 clocks per 16-bit write) and bytes were lost.
+    (* ramstyle = "MLAB, no_rw_check" *) reg [59:0] wq_mem [0:63];
+    reg   [6:0] wq_wp = 0, wq_rp = 0;
     wire        wq_empty = (wq_wp == wq_rp);
+    always @(posedge clk) if (wr && mine_w) wq_mem[wq_wp[5:0]] <= {addr, wdata, wmask};
+    wire [59:0] wq_head = wq_mem[wq_rp[5:0]];
 
     reg         rd_pend = 1'b0;            // a CPU read is outstanding (stalls the bus)
     reg  [23:0] rd_a = 0;
@@ -421,10 +430,7 @@ module s10_mem (
 
         // ---- bus capture (any state)
         if (wr && mine_w) begin
-            wq_a[wq_wp[1:0]] <= addr;
-            wq_d[wq_wp[1:0]] <= wdata;
-            wq_m[wq_wp[1:0]] <= wmask;
-            wq_wp            <= wq_wp + 1'd1;
+            wq_wp <= wq_wp + 1'd1;
         end
         if (rd && mine_r) begin
             rd_pend <= 1'b1;
@@ -465,11 +471,12 @@ module s10_mem (
                         st      <= S_UP;
                     end else if (!wq_empty) begin
                         t_write <= 1'b1; t_dma <= 1'b0;
-                        t_a     <= wq_a[wq_rp[1:0]];
-                        t_d     <= wq_d[wq_rp[1:0]];
-                        t_m     <= wq_m[wq_rp[1:0]];
+                        t_a     <= wq_head[59:36];
+                        t_d     <= wq_head[35:4];
+                        t_m     <= wq_head[3:0];
+                        t_h     <= (wq_head[1:0] == 2'b00);          // only the high half written: start there
                         wq_rp   <= wq_rp + 1'd1;
-                        st      <= (board_memn && wq_a[wq_rp[1:0]][23:20] == 4'h5) ? S_SRAM : S_WHALF;
+                        st      <= (board_memn && wq_head[59:56] == 4'h5) ? S_SRAM : S_WHALF;
                     end else if (rd_pend) begin
                         t_write <= 1'b0; t_dma <= 1'b0;
                         t_a     <= rd_a;
@@ -740,7 +747,7 @@ module s10_mem (
                     st <= S_WNEXT;
                 end
                 S_WNEXT: begin
-                    if (!t_h) begin t_h <= 1'b1; st <= S_WHALF; end
+                    if (!t_h && t_m[3:2] != 2'b00) begin t_h <= 1'b1; st <= S_WHALF; end   // high half written too
                     else st <= S_IDLE;
                 end
 

@@ -1,15 +1,16 @@
 # Namco System 10 for MiSTer
 
 A MiSTer FPGA core for Namco's **System 10** arcade board (2000-2007), the PlayStation-based platform
-behind **Mr. Driller 2**, **Mr. Driller G**, **Point Blank 3**, **Gamshara**, the Taiko no Tatsujin series and
+behind **Mr. Driller 2**, **Mr. Driller G**, **Point Blank 3**, **Gamshara**, **Taiko no Tatsujin** and
 many more. One core (`Namco_S10`) runs the board; each game has its own MRA.
 
 I created this core because I wanted to play these games on my MiSTer FPGA. I am posting it here and open
 sourcing it for everyone to enjoy and give feedback/make improvements. This core was created with the
 assistance of AI tooling.
 
-**Status: beta.** Mr. Driller 2, Mr. Driller G and Point Blank 3 (with GunCon 2) are playable. Gamshara is in testing. The core is
-built so that the rest of the System 10 library can be added game by game.
+**Status: beta.** Mr. Driller 2, Mr. Driller G, Point Blank 3 (with GunCon 2) and Gamshara are tested on hardware.
+Kono e Tako and Taiko no Tatsujin 2 / 4 / 6 are in testing. The core is built so that the rest of the System 10
+library can be added game by game.
 
 ## Quick start
 
@@ -25,11 +26,32 @@ ROMs are not included. You must supply your own.
 
 | Game | MAME set | Year | ROM board | Video | Status |
 | --- | --- | --- | --- | --- | --- |
-| Mr. Driller 2 (World, DR22 Ver.A) | `mrdrilr2` | 2000 | MEM(M) | 240p | Playable |
-| Mr. Driller G (Japan, DRG1 Ver.A) | `mrdrilrg` | 2001 | MEM(N) | 480i (240p in the service menu) | Playable |
-| Point Blank 3 (World, GNN2 Ver.A) | `ptblank3` | 2000 | MEM(N) + EXIO(G) light-gun board | 240p | Playable |
-| Gamshara (20020912A, 10021 Ver.A) | `gamshara` | 2002 | MEM(N) | 480i | In testing |
+| Mr. Driller 2 (World, DR22 Ver.A) | `mrdrilr2` | 2000 | MEM(M) | 240p | Tested working |
+| Mr. Driller G (Japan, DRG1 Ver.A) | `mrdrilrg` | 2001 | MEM(N) | 480i (240p in the service menu) | Tested working |
+| Point Blank 3 (World, GNN2 Ver.A) | `ptblank3` | 2000 | MEM(N) + EXIO(G) light-gun board | 240p | Tested working (GunCon 2) |
+| Gamshara (20020912A, 10021 Ver.A) | `gamshara` | 2002 | MEM(N) | 480i | Tested working (graphics fix in testing, see below) |
 | Kono e Tako (10021 Ver.A) | `konotako` | 2003 | MEM(N) | 480i | In testing |
+| Taiko no Tatsujin 2 (Japan, TK21 Ver.C) | `taiko2` | 2001 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
+| Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2003 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
+| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
+
+Gamshara: the first test showed flickering / missing graphics on the title screen, the attract-mode character
+select and in parts of the game. The cause was found (the game resets the GPU command buffer at every vblank,
+which this core handled destructively, unlike the System 10 hardware and MAME) and fixed in the following build.
+
+### Taiko no Tatsujin: the disc
+
+The Taiko games need their CD-ROM as well as the ROM zip. MiSTer cores cannot read MAME's CHD format directly,
+so convert it once with MAME's `chdman`:
+
+```
+chdman extractcd -i nm-002.chd -o nm-002.cue
+```
+
+(`tk-41.chd` for Taiko 4, `tk-6.chd` for Taiko 6). Copy the resulting `.bin` to the SD card (for example
+`/media/fat/games/Namco_S10/`), start the game, open the OSD and use **Mount CD** to select it. The core remembers
+the disc for each game and mounts it automatically from then on. Both `.bin` types chdman writes (2352- and
+2048-byte sectors) and `.iso` files work.
 
 ### Untested games
 
@@ -45,8 +67,8 @@ driver and were checked against MAME's formulas; reports are welcome.
 | Panikuru Panekuru (Japan, PPA1 Ver.A) | `panikuru` | 2002 |
 | Star Trigon (Japan, STT1 Ver.A) | `startrgn` | 2002 |
 
-The other System 10 games need hardware the core does not have yet: the EXIO board's microcontroller and analog
-inputs (GAHAHA Ippatsudou 1/2, Taiko no Tatsujin), the EXFINAL board (Medal no Tatsujin), MGEXIO (medal games),
+The other System 10 games need hardware the core does not have yet: the EXIO board's analog sticks
+(GAHAHA Ippatsudou 1/2), the EXFINAL board (Medal no Tatsujin), MGEXIO (medal games),
 MEM(P3) with its MP3 decoder (Golgo 13, Nice Tsukkomi, Seishun Quiz) and Taito's MEM(IO) (Hajime no Ippo).
 
 ### Alternatives
@@ -66,18 +88,25 @@ to switch the game to 240p. Gamshara and Kono e Tako run at 640x480 interlaced.
 
 ## Controls
 
-| MiSTer button | Default pad button | Mr. Driller | Point Blank 3 | Gamshara |
-| --- | --- | --- | --- | --- |
-| Button 1 | A | Drill | Trigger | Button 1 |
-| Button 2 | B | | | Button 2 |
-| Button 3 | X | | | Button 3 |
-| Start | Start | Start | Start | Start |
-| Coin | Select | Coin | Coin | Coin |
-| Test | L | Test switch (slide: press once to enter the service menu, again to leave) | same | same |
-| Service | R | Service credit | same | same |
-| Pause | R3 | Pause | Pause | Pause |
+The buttons are asked for in this order: Buttons 1-6 (only the ones the game uses), Start, Coin, Test, Service,
+Pause.
 
-Mr. Driller uses a 4-way joystick, Gamshara an 8-way joystick.
+| MiSTer button | Default pad button | Mr. Driller | Point Blank 3 | Gamshara | Taiko no Tatsujin |
+| --- | --- | --- | --- | --- | --- |
+| Button 1 | A | Drill | Trigger | Button 1 | Enter |
+| Button 2 | B | | | Button 2 | Left Don (left drum surface) |
+| Button 3 | X | | | Button 3 | Right Don (right drum surface) |
+| Button 4 | Y / L | | | | Left Ka (left rim) |
+| Button 5 | R2 / R | | | | Right Ka (right rim) |
+| Start | Start | Start | Start | Start | |
+| Coin | Select | Coin | Coin | Coin | Coin |
+| Test | L (L2 for Taiko) | Test switch (slide: press once to enter the service menu, again to leave) | same | same | same |
+| Service | R (R2 for Taiko) | Service credit | same | same | same |
+| Pause | R3 | Pause | Pause | Pause | Pause |
+
+Mr. Driller uses a 4-way joystick, Gamshara an 8-way joystick; Taiko uses Up / Down to choose songs. A USB Taiko
+drum controller works by mapping its four zones to Buttons 2-5. If you used an earlier build, map the buttons
+again once (the order changed).
 
 ### Light guns (Point Blank 3)
 
@@ -124,6 +153,8 @@ data, board register traffic, boot sequence). In a few places the core goes beyo
   the game code, and by running MAME with the EXIO(G) ident: same gameplay).
 * **Mr. Driller 2 operator menu.** MAME lists "opening the operator menu sometimes can crash Mr. Driller 2" as a
   known issue. On the core it opens reliably (tested five times in a row on hardware, no crash).
+* **Taiko no Tatsujin.** MAME runs Taiko 2 / 4 / 6 but marks them not working because its PlayStation timing is
+  not accurate enough for a rhythm game. The core runs the PlayStation CPU, GPU and SPU at hardware timing.
 * **Light guns.** MAME aims with a mouse or stick-driven crosshair. The core takes real light guns (GunCon 2 on
   a CRT, Sinden, Gun4IR) through MiSTer's gun support.
 

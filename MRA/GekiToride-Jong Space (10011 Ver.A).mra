@@ -22,7 +22,7 @@
     <players>2</players>
     <joystick>8-way</joystick>
     <rotation>horizontal</rotation>
-    <buttons names="Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3" default="A,Start,Select,L,R,R3,B,X"/>
+    <buttons names="Button 1,Button 2,Button 3,-,-,-,Start,Coin,Test,Service,Pause" default="A,B,X,Y,R2,L2,Start,Select,L,R,R3"/>
 
     <switches default="FF">
         <dip name="SW1-2" bits="6" ids="On,Off"/>

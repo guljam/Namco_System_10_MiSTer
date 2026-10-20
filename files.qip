@@ -9,6 +9,8 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_crypt_t1.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_crypt_t2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_io.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_gun.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_atapi.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_exio.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_mem.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/s10_loader.sv
 set_global_assignment -name VHDL_FILE rtl/s10_ch3.vhd
