@@ -753,9 +753,10 @@ module s10_mem (
                                 mark_dirty();
                                 start_job(J_FILL, {2'b00, win_word[24:15], 16'd0}, 14'd8192, S_WNEXT);
                             end
-                        FM_SETMASTER: begin
+                        FM_SETMASTER: begin                    // then read status (MAME)
                             if (t_d16[7:0] == 8'hF1) fmaster <= 1'b1;
                             if (t_d16[7:0] == 8'hD0) fmaster <= 1'b0;
+                            fmode <= FM_STATUS;
                         end
                         FM_WBUF1: begin                        // write-buffer word count
                             wb_n     <= (t_d16 > 16'd15) ? 5'd16 : t_d16[4:0] + 1'd1;

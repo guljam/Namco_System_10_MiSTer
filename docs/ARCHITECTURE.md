@@ -1,6 +1,6 @@
 # Namco System 10 for MiSTer: architecture
 
-Status: design + implementation plan, 2026-10-19. First targets **Mr. Driller 2** (`mrdrilr2`,
+Status: implemented (first hardware test pending), 2026-10-19. First targets **Mr. Driller 2** (`mrdrilr2`,
 `mrdrilr2j`, `mrdrilr2u`) and **Mr. Driller G** (`mrdrilrg`). The design is table-driven so the
 rest of the System 10 library can be added by MRA data plus small, isolated board modules.
 
@@ -78,7 +78,7 @@ descrambled BIOS goes to SDRAM.
 0x1FC00000. The core does the same at load time: the MRA streams that part (ioctl index 0) and the loader
 unscrambles each 16-bit word (`bitswap16(w ^ xor)`, per-game permutation) and writes it to the SDRAM BIOS
 area (4 MB, 0x400000, where the System 12 program ROM was).
-* MEM(M): flash bytes [0, 0x62000) -> BIOS [0, 0x62000).
+* MEM(M): flash bytes [0, 0x62000) -> BIOS [0, 0x62000), `bitswap16(w ^ 0xAAAA)`.
 * MEM(N): NAND0 pages 0x40-0x11F -> BIOS [0, 0x1C000); pages 0x120-0x201F -> BIOS [0x20000, 0x3FE000).
   The loader drops the 16 spare bytes of every 0x210-byte page and big-endian-swaps each word.
 * Unloaded BIOS addresses read 0x55555555 (MAME fills the region with 0x55).
@@ -136,7 +136,7 @@ reused.
 | 0x20000000-0x21FFFFFF | ascal scaler (sys) |
 | 0x24000000-0x257FFFFF | rotation frame buffers (3 x 8 MB) |
 | 0x30000000-0x301FFFFF | PSX VRAM (2 MB) |
-| 0x31800000-0x3187FFFF | SPU RAM (PSX_MiSTer client 3) |
+| 0x30300000-0x3037FFFF | SPU RAM (psx_top arbiter client 3) |
 | **0x32000000-0x3DFFFFFF** | **MEM board images** (192 MB: flash/mask ROMs or up to 11 NANDs at 0x1080000 each); written by Main_MiSTer through MRA `address=` (fast loading), or by the core from the ioctl stream with older firmware |
 | 0x3E000000- | PSX savestates (unused) |
 
@@ -162,9 +162,9 @@ MRA indexes:
 | --- | --- | --- |
 | 0 | BIOS part of flash / NAND0 | ioctl -> loader unscrambles -> SDRAM BIOS |
 | 1 | board record (64-byte header + crypto parameters) | ioctl -> registers / small BRAM |
-| 2 | MEM(M) flash, or NAND0 | MRA `address=` -> DDR3 (fallback: ioctl -> DDR3 writer) |
-| 3 | MEM(M) data ROMs, or NAND1..n concatenated | same |
-| 9 | nvram (flash 0x40000 block / NAND0 block 1) | standard nvram load/save via the MEM board client |
+| 2 | MEM(M) flash, or all NANDs concatenated | MRA `address=0x32000000` -> DDR3 (fallback: ioctl -> DDR3 writer) |
+| 3 | MEM(M) data mask ROMs | MRA `address=0x32800000` -> DDR3 |
+| 9 | nvram: a window of the DDR3 image (MEM(M) flash 0x40000, 64 KB; MEM(N) NAND0 block 1, 0x4200 bytes) | load: written into DDR3 by the loader while the PSX is in reset; save: uploaded from DDR3 by `s10_mem` |
 
 The core holds the PSX in reset until all indexes have arrived, then releases it (the Tenkomori
 reset chain).
@@ -190,7 +190,20 @@ Little-endian, written by `scripts/romtool.py` from a per-game table that mirror
 | 424 | 32 | nonlinear A_c, A_p, B_c, B_p |
 | 456 | 2 | nonlinear output mask |
 
-## 6. Verification plan
+## 6. Verification
+
+Status (2026-10-19):
+* Decrypters: 100% of MAME's words (mrdrilr2 1,634,304, mrdrilrg 1,687,552; `sim/crypt`, ModelSim).
+* BIOS descramble (`s10tool.py check`): byte-identical to MAME's `maincpu:rom` for all sets.
+* MEM board (`sim/board`, NVC): every board access MAME makes in the first 4 s replayed into `s10_mem`,
+  each read compared (mrdrilrg: 2.86M accesses incl. all decrypted words).
+* System (`sim/system/run10.sh`, NVC mixed VHDL/SystemVerilog): BIOS boots into the PS1 kernel with
+  the same GP1 sequence as MAME.
+
+Simulator note: NVC 1.23 mis-evaluates XOR reductions of vectors wider than 64 bits and does not
+parse `'0` fills; the RTL avoids both.
+
+Plan:
 
 1. **Decrypters**: MAME Lua captures (crypto switch writes + every cipher/plain word pair the game reads)
    -> bench replays them through `s10_crypt_t1/t2`; 100% match required.

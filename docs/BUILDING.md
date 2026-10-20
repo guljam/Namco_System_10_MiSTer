@@ -5,40 +5,42 @@
 Quartus Prime Lite 17.0 (the version the MiSTer framework targets).
 
 ```
-powershell -ExecutionPolicy Bypass -File scripts\build.ps1            # full compile -> output_files\Tenkomori.rbf
+powershell -ExecutionPolicy Bypass -File scripts\build.ps1            # full compile -> output_files\Namco_S10.rbf
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -MapOnly   # analysis & synthesis only
 ```
 
 The script waits for any other Quartus job on the machine to finish first and writes
 `build/quartus.log` plus a resource/timing summary in `build/build-summary.txt`.
-Release bitstreams are copied to `Releases/Tenkomori_YYYYMMDD.rbf`.
+Release bitstreams are copied to `Releases/Namco_S10_YYYYMMDD.rbf`.
 
-## MRAs
+## MRAs and memory images
 
 ```
-python scripts/romtool.py mra      # regenerate MRA/ and MRA/_alternatives/
-python scripts/romtool.py check    # rebuild every ioctl stream from the zips, compare with MAME's layout
+python scripts/s10tool.py mra               # regenerate MRA/ and MRA/_alternatives/
+python scripts/s10tool.py check             # descrambled BIOS vs MAME's maincpu:rom (local/mame/dumpbios.lua)
+python scripts/s10tool.py images SET DIR    # bios.bin / ddr.bin / record.bin for the benches
 ```
 
-ROM zips are read from `~/Downloads/mame/roms` (`--romdir` to change). Nothing ROM-derived is
-written into the repository.
+Games are described in `scripts/s10tool.py` (`GAMES`/`BOARDS`, mirroring MAME's `namcos10.cpp`): ROM files,
+board type, descrambler permutation and XOR, decrypter parameters, nvram window. ROM zips are read from
+`~/Downloads/mame/roms` (`--romdir`). Nothing ROM-derived is written into the repository.
 
-## DDR3 fast loading
+## Simulation
 
-See `docs/FASTLOAD.md`: `rtl/tkm_fastload.sv` (enabled by `TKM_FASTLOAD` in `Tenkomori.qsf`), Verilator
-bench `sim/fastload`.
+| Bench | Tool | What it covers |
+| --- | --- | --- |
+| `sim/crypt` | ModelSim | `s10_crypt_t1/t2` against every cipher/plain word pair MAME produces (`sim/crypt/README.md`) |
+| `sim/board` | NVC | `s10_mem` (+ loader) replaying every MEM-board access MAME makes (`local/mame/boardcap.lua`), each read compared |
+| `sim/system` | NVC | the whole core except the MiSTer framework: psx_mister + System 10 board on preloaded SDRAM/DDR3 images; video frames (`gra2png.py`), PC trace, GP1 log, board-bus log |
 
-## Simulation (NVC)
+```
+GAME=mrdrilrg sim/board/run.sh
+GAME=mrdrilrg sim/system/run10.sh 400ms       # REUSE=1 to rerun the cached elaboration
+```
 
-| Bench | What it covers |
-| --- | --- |
-| `sim/h8cpu` | H8/300H CPU core replayed against a 1.2M-instruction MAME register trace of the Tenkomori sound program (`sim/h8cpu/README.md`) |
-| `sim/sub` | `s12_sub` on its own: H8 + peripherals + C352 + shared RAM + program cache, logs on-chip I/O and C352 writes for comparison with MAME (`local/mame/c352log.lua`) |
-| `sim/system` | the whole core except the MiSTer framework: PSX CPU/GPU/DMA/MDEC with the System 12 memory map, ROM DMA, boot signature, H8 sub board, all on a preloaded SDRAM image; writes the video output as frames (`gra2png.py`) |
+NVC 1.23 runs the mixed VHDL/SystemVerilog design; the SystemVerilog board modules are analysed into the
+testbench library and bound through component declarations. Two NVC limitations are worked around in the RTL:
+no `'0` fills, and XOR reductions are kept to 64 bits.
 
-`sim/system/run.sh 400ms` analyses, elaborates and runs the full system (about 1.5 s of host
-time per simulated millisecond). The upstream PSX core writes debug text files to `R:\`; map a
-folder there first (`subst R: %TEMP%\rdisk`).
-
-MAME reference captures used during development (Lua bus taps, debugger traces) live in
-`local/mame/` and are not part of the repository.
+MAME reference captures (Lua bus taps, BIOS dumps, PC traces) live in `local/mame/` and are not part of the
+repository.
