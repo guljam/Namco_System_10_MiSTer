@@ -1768,7 +1768,20 @@ begin
 
    -- build #142: ZN-1 arcade — SIO1 (PSX link cable @ 0x1F801050) removed.
    -- Arcade boards have no link cable. Stub bus + savestate outputs.
-   bus_sio_dataRead  <= (others => '0');
+   -- System 10: the kernel prints a boot log through SIO1 and polls SIO_STAT for
+   -- TX ready/idle before every byte. Report both (MAME: stat 0x0005); a stat of
+   -- 0 hangs the boot in the TTY driver.
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+         bus_sio_dataRead <= (others => '0');
+         if (bus_sio_read = '1') then
+            if (bus_sio_addr = x"4") then
+               bus_sio_dataRead <= x"00000005";
+            end if;
+         end if;
+      end if;
+   end process;
    SS_DataRead_SIO   <= (others => '0');
    
    irq_SIO       <= '0'; -- todo
