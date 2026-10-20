@@ -271,6 +271,12 @@ entity psx_top is
       -- EEPROM/nvram (MRA index 9) load + save -> zn1_io EEPROM BRAM
       -- Namco System 10 board bus (EXP1 0x1F000000-0x1F7FFFFF, EXP3 0x1FA00000-0x1FBFFFFF) -> s10_io /
       -- s10_mem at top level. Reads: data in the cycle after s10_rd, or later while s10_stall is high.
+      s10_exio        : in  std_logic := '0';   -- EXIO board fitted: 0x1FE00000-0x1FFFFFFF on the board bus
+      s10_gun_cross   : in  std_logic_vector(1 downto 0) := "00";   -- crosshair on, P2 & P1
+      s10_gun1_x      : in  unsigned(7 downto 0) := (others => '0'); -- aim, 0..255 across the picture
+      s10_gun1_y      : in  unsigned(7 downto 0) := (others => '0');
+      s10_gun2_x      : in  unsigned(7 downto 0) := (others => '0');
+      s10_gun2_y      : in  unsigned(7 downto 0) := (others => '0');
       s10_addr        : out std_logic_vector(23 downto 0) := (others => '0');
       s10_wdata       : out std_logic_vector(31 downto 0) := (others => '0');
       s10_wmask       : out std_logic_vector(3 downto 0) := (others => '0');
@@ -1685,18 +1691,20 @@ begin
    -- Gun tie-offs. The GPU still consumes these for its crosshair overlay
    -- (see igpu port map below), so they must be driven. No gun is present:
    -- offscreen = '1', crosshair off, coordinates zero.
-   Gun1X            <= (others => '0');
-   Gun2X            <= (others => '0');
-   Gun1Y            <= (others => '0');
-   Gun2Y            <= (others => '0');
-   Gun1Y_scanlines  <= (others => '0');
-   Gun2Y_scanlines  <= (others => '0');
+   -- System 10 light guns: only the crosshair overlay is used (the positions reach the game through the
+   -- EXIO board at top level). Y in scanlines of the 240-line picture: port * 240 / 256.
+   Gun1X            <= s10_gun1_x;
+   Gun2X            <= s10_gun2_x;
+   Gun1Y            <= s10_gun1_y;
+   Gun2Y            <= s10_gun2_y;
+   Gun1Y_scanlines  <= ('0' & s10_gun1_y) - resize(s10_gun1_y(7 downto 4), 9);
+   Gun2Y_scanlines  <= ('0' & s10_gun2_y) - resize(s10_gun2_y(7 downto 4), 9);
    Gun1AimOffscreen <= '0';
    Gun2AimOffscreen <= '0';
    Gun1offscreen    <= '1';
    Gun2offscreen    <= '1';
-   Gun1CrosshairOn  <= '0';
-   Gun2CrosshairOn  <= '0';
+   Gun1CrosshairOn  <= s10_gun_cross(0);
+   Gun2CrosshairOn  <= s10_gun_cross(1);
    JustifierIrqEnable <= (others => '0');
 
    -- SIO0 / joypad bus slave: register stub, no device attached, never IRQs.
@@ -3963,6 +3971,7 @@ begin
 
       zn_platform          => zn_platform,
       zn_system11          => zn_system11,
+      zn_exio              => s10_exio,
       s11_bank             => zn_s11_bank,
       s11_up               => zn_s11_up,
 

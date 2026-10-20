@@ -38,7 +38,7 @@ end entity;
 architecture arch of ddrram_model is
 
    -- not full size, because of memory required
-   type t_data is array(0 to (2**25)-1) of integer;   -- 128 MB from 0x30000000
+   type t_data is array(0 to (2**26)-1) of integer;   -- 256 MB from 0x30000000
    type bit_vector_file is file of bit_vector;
    type t_ssfile is file of character;
    
@@ -46,7 +46,7 @@ architecture arch of ddrram_model is
    
 begin
 
-   intern_addr <= "0000" & DDRAM_ADDR(23 downto 0) & "0";
+   intern_addr <= "000" & DDRAM_ADDR(24 downto 0) & "0";
 
    process
    

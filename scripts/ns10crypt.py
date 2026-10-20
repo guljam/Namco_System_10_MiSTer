@@ -189,6 +189,46 @@ def mrdrilrg_generic():
     return type2_generic(MRDRILRG)
 
 
+# ---- ptblank3 / gunbalina (namcos10.cpp ns10_ptblank3): NS10_TYPE2_DECRYPTER_NONLINEAR, the nonlinear term
+# is bit n of the recorded "ptblank3_nonlinear" table (n = words decrypted since reset) shifted to bit 11;
+# IV from the default INIT_SBOX: bitswap<16>(INIT_SBOX[iv], 3,16,16,2,1,16,16,0,16 x 8).
+_T2_INIT_SBOX = [0, 12, 13, 6, 2, 4, 9, 8, 11, 1, 7, 15, 10, 5, 14, 3]
+
+
+def _sbox_iv(v):
+    return (((v >> 3) & 1) << 15) | (((v >> 2) & 1) << 12) | (((v >> 1) & 1) << 11) | ((v & 1) << 8)
+
+
+PTBLANK3 = dict(
+    emask=[0x0000000057001200, 0x00000000000000a4, 0x0000000000000150, 0x0000000000008004,
+           0x0000000057002204, 0x0000000009001000, 0x0000000000102000, 0x0000000064004888,
+           0x0000000000100008, 0x000000a0c0980600, 0x000000001801c020, 0x00005810881a09c0,
+           0x0000000400980600, 0x0000000000000300, 0x0000000000000080, 0x0000000000a00c0a],
+    dmask=[0x0000000041051000, 0x0000000000000024, 0x0000000000000050, 0x0000000000008004,
+           0x0000000041052200, 0x0000000009401100, 0x0000000000122000, 0x0000000004100898,
+           0x0000000000120088, 0x0000000040a80400, 0x0000000019004000, 0x000001859830281d,
+           0x0000002400880201, 0x0000000000000300, 0x00000000000000c0, 0x0000000000000408],
+    xmask=0xe1b8,
+    ivtab=[_sbox_iv(v) for v in _T2_INIT_SBOX],
+    ac=0, ap=0, bc=0, bp=0,
+    out=0x0800,
+    table=("ptblank3_nonlinear", "5997d7dd", 0x2ec00),
+)
+
+
+class Type2Table(Type2Base):
+    """Nonlinear term from a bit table (MAME ns10_type2_decrypter_nonlinear_device)."""
+
+    def __init__(self, emask, dmask, xmask, ivtab, out, table):
+        self.out, self.table, self.count = out, table, 0
+        super().__init__(emask, dmask, xmask, ivtab)
+
+    def nonlinear(self, C, P):
+        b = (self.table[self.count // 8] >> (7 - self.count % 8)) & 1
+        self.count = (self.count + 1) % (len(self.table) * 8)
+        return self.out if b else 0
+
+
 def pack_wide(values, width):
     """Pack a list into one integer, element i at bits [i*width +: width] (RTL vector layout)."""
     r = 0

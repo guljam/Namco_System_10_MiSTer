@@ -37,6 +37,9 @@ module s10_mem (
     input  wire [1023:0] t2_iv,
     input  wire  [63:0]  t2_nl_ac, t2_nl_ap, t2_nl_bc, t2_nl_bp,
     input  wire  [15:0]  t2_nl_out,
+    input  wire          t2_nl_table,        // nonlinear term from the bit table (MAME ..._nonlinear_device)
+    input  wire  [20:0]  t2_nl_bits,         // table length in bits
+    input  wire  [27:0]  nl_off,             // image byte offset of the table
 
     // ---- board bus (CPU address bits 23..0)
     input  wire  [23:0]  addr,
@@ -99,6 +102,15 @@ module s10_mem (
     wire [15:0] t1_plain, t2_plain;
     wire        t1_active, t2_active;
 
+    // nonlinear bit table: global bit cursor (MAME m_nonlinear_count: reset only with the board, advanced by
+    // every decrypted word, wraps at the table end) and one cached 64-bit DDR3 beat of the table
+    reg  [20:0] nl_cnt   = 0;
+    reg  [63:0] nl_beat  = 0;              // written by the DDR3 engine (clk2), read after job_done
+    reg  [14:0] nl_tag   = 0;
+    reg         nl_valid = 1'b0;
+    wire        nl_bit   = nl_beat[{nl_cnt[5:3], 3'b111} - nl_cnt[2:0]];   // MSB first within each byte
+    wire        nl_hit   = nl_valid && nl_tag == nl_cnt[20:6];
+
     s10_crypt_t1 crypt_t1 (
         .clk(clk), .reset(reset || crypt_type != 2'd1),
         .activate(cr_act_p), .iv(cr_iv), .deactivate(cr_deact_p),
@@ -111,6 +123,7 @@ module s10_mem (
         .word_valid(cr_step && crypt_type == 2'd2), .cipher(cr_cipher),
         .emask(t2_emask), .dmask(t2_dmask), .xmask(t2_xmask), .ivtab(t2_iv),
         .nl_ac(t2_nl_ac), .nl_ap(t2_nl_ap), .nl_bc(t2_nl_bc), .nl_bp(t2_nl_bp), .nl_out(t2_nl_out),
+        .nl_tab_en(t2_nl_table), .nl_tab_bit(nl_bit),
         .plain(t2_plain), .active(t2_active)
     );
     wire        cr_active = (crypt_type == 2'd1) ? t1_active : (crypt_type == 2'd2) ? t2_active : 1'b0;
@@ -151,14 +164,15 @@ module s10_mem (
     // =====================================================================================================
     // DDR3 engine (clk2). Jobs come from the clk FSM with a 4-phase handshake (job_req / job_done).
     // =====================================================================================================
-    localparam [1:0] J_FETCH = 2'd0,       // read job_beats beats at job_addr into PAGE[0..]
-                     J_WBACK = 2'd1,       // write PAGE & PGM back (NAND program), job_beats beats
-                     J_FILL  = 2'd2,       // write job_beats beats of 0xFF (erase)
-                     J_WRITE = 2'd3;       // write one beat job_d64 with job_be
+    localparam [2:0] J_FETCH = 3'd0,       // read job_beats beats at job_addr into PAGE[0..]
+                     J_WBACK = 3'd1,       // write PAGE & PGM back (NAND program), job_beats beats
+                     J_FILL  = 3'd2,       // write job_beats beats of 0xFF (erase)
+                     J_WRITE = 3'd3,       // write one beat job_d64 with job_be
+                     J_NL    = 3'd4;       // read one beat at job_addr into nl_beat
     localparam int   BURST   = 32;
 
     reg         job_req   = 1'b0;          // clk
-    reg   [1:0] job_type  = 0;
+    reg   [2:0] job_type  = 0;
     reg  [27:0] job_addr  = 0;            // image byte offset, 8-aligned
     reg  [13:0] job_beats = 0;
     reg  [63:0] job_d64   = 0;
@@ -187,7 +201,7 @@ module s10_mem (
                         e_left <= job_beats;
                         e_idx  <= 0;
                         eng_ri <= 0;
-                        if (job_type == J_FETCH) est <= E_RDREQ;
+                        if (job_type == J_FETCH || job_type == J_NL) est <= E_RDREQ;
                         else begin
                             eng_rd_own <= (job_type == J_WBACK);
                             est        <= E_WRPREP;
@@ -207,7 +221,8 @@ module s10_mem (
                 E_RD: begin
                     if (ddr_ack) begin e_acked <= 1'b1; ddr_rd <= 1'b0; end
                     if (ddr_dout_ready && (e_acked || ddr_ack)) begin
-                        eng_pg_we <= 1'b1;
+                        if (job_type == J_NL) nl_beat <= ddr_dout;
+                        else eng_pg_we <= 1'b1;
                         eng_pg_wi <= e_idx;
                         eng_pg_wd <= ddr_dout;
                         e_idx     <= e_idx + 1'd1;
@@ -381,7 +396,7 @@ module s10_mem (
     reg  [26:0] save_timer = 0;
     reg         dirty = 1'b0;
 
-    task automatic start_job(input [1:0] ty, input [27:0] a, input [13:0] beats, input [5:0] ret);
+    task automatic start_job(input [2:0] ty, input [27:0] a, input [13:0] beats, input [5:0] ret);
         job_type  <= ty;
         job_addr  <= a;
         job_beats <= beats;
@@ -434,6 +449,7 @@ module s10_mem (
             bank_idx <= 0; bank_direct <= 1'b0; fmode <= FM_NORMAL; fstatus <= 8'h80; fmaster <= 1'b0;
             nand_idx <= 0; nand_ctrl <= 0; nand_address <= 0; dma_on <= 1'b0; dq_full <= 1'b0;
             up_busy <= 1'b0; sram_req <= 1'b0;
+            nl_cnt <= 0; nl_valid <= 1'b0;
             for (int c = 0; c < 16; c++) begin
                 n_mode[c] <= NM_INIT; n_pmode[c] <= PM_A; n_page[c] <= 0; n_byte[c] <= 0; n_aload[c] <= 0;
             end
@@ -529,7 +545,10 @@ module s10_mem (
                 end
                 S_NBDONE: begin
                     if (!nb_second) begin nb_second <= 1'b1; st <= S_NB; end
-                    else if (cr_active) begin
+                    else if (cr_active && t2_nl_table && !nl_hit) begin
+                        nl_tag <= nl_cnt[20:6];                                       // fetch the table beat
+                        start_job(J_NL, nl_off + {4'd0, nl_cnt[20:6], 3'd0}, 14'd1, S_NBDONE);
+                    end else if (cr_active) begin
                         cr_cipher <= nb_word;
                         cr_step   <= 1'b1;
                         st        <= S_DEC1;
@@ -541,7 +560,10 @@ module s10_mem (
                         st <= S_RNEXT;
                     end
                 end
-                S_DEC1: st <= S_DEC2;                          // decrypter stepped with cr_cipher; plain captured
+                S_DEC1: begin                                  // decrypter steps with cr_cipher (and nl_bit) at this edge
+                    if (t2_nl_table && cr_active) nl_cnt <= (nl_cnt == t2_nl_bits - 1'd1) ? 21'd0 : nl_cnt + 1'd1;
+                    st <= S_DEC2;
+                end
                 S_DEC2: begin h_val <= cr_plain_q; st <= S_RNEXT; end
 
                 // ---- MEM(M) window (MAME range_r)
@@ -613,6 +635,7 @@ module s10_mem (
                     if (job_req && job_done) begin
                         job_req <= 1'b0;
                         if (job_type == J_FETCH) tag_valid <= 1'b1;
+                        if (job_type == J_NL)    nl_valid  <= 1'b1;
                         st <= st_ret;
                     end
                 end

@@ -38,7 +38,7 @@ CONN = {
     "zn_system11": "'1'", "zn_platform": '"0000"', "zn_dsw": 'x"FF"',
     "s10_addr": "s10_addr", "s10_wdata": "s10_wdata", "s10_wmask": "s10_wmask", "s10_size": "s10_size",
     "s10_rd": "s10_rd", "s10_wr": "s10_wr", "s10_rdata": "s10_rdata", "s10_stall": "s10_stall",
-    "s10_irq10": "s10_irq10", "s10_ddr_request": "s10_ddr_request", "s10_ddr_ack": "s10_ddr_ack",
+    "s10_irq10": "s10_irq10", "s10_exio": "s10_exio_on", "s10_ddr_request": "s10_ddr_request", "s10_ddr_ack": "s10_ddr_ack",
     "s10_ddr_burstcnt": "s10_ddr_burstcnt", "s10_ddr_addr": "s10_ddr_addr", "s10_ddr_din": "s10_ddr_din",
     "s10_ddr_be": "s10_ddr_be", "s10_ddr_we": "s10_ddr_we", "s10_ddr_rd": "s10_ddr_rd",
     "s12_rdma_start": "rdma_start", "s12_rdma_valid": "rdma_valid", "s12_rdma_pop": "rdma_pop",

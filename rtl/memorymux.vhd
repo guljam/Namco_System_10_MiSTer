@@ -142,6 +142,7 @@ entity memorymux is
       -- (no PSX BIOS) and bank the ROM (16MB rom8 / 32MB rom8_64) as 8x1MB
       -- windows @0x1F000000. s11_bank = 8 packed 5-bit page selectors.
       zn_system11          : in  std_logic := '0';
+      zn_exio              : in  std_logic := '0';   -- System 10 EXIO board fitted: 0x1FE00000-0x1FFFFFFF go to bus_znio
       s11_bank             : in  std_logic_vector(39 downto 0) := (others => '0');
       -- rom8_64 upper-16MB latch (MAME rom8_64_upper_w @0x1F080000/2); consumed
       -- by zn1_io at bank-register write time.
@@ -524,7 +525,8 @@ begin
       bus_znio_writeMask <= writeMask_buf;
       bus_znio_size      <= std_logic_vector(reqsize_buf);
       if (zn_system11 = '1') then
-         if ((address >= 16#1F000000# and address < 16#1F800000#) or (address >= 16#1FA00000# and address < 16#1FC00000#)) then
+         if ((address >= 16#1F000000# and address < 16#1F800000#) or (address >= 16#1FA00000# and address < 16#1FC00000#) or
+             (zn_exio = '1' and address >= 16#1FE00000# and address < 16#20000000#)) then
             bus_znio_read  <= enableRead;
             bus_znio_write <= enableWrite;
          end if;
@@ -880,6 +882,15 @@ begin
                            end if;
                            ram_be        <= mem_writeMask;
                            ram_dataWrite <= mem_dataWrite;
+                        elsif (zn_system11 = '1' and zn_exio = '1' and mem_addressData(28 downto 0) >= 16#1FE00000# and mem_addressData(28 downto 0) < 16#20000000#) then
+                           -- System 10 EXIO board (light-gun I/O): served by s10_io over bus_znio
+                           ext_lastactive <= '0';
+                           if (mem_rnw = '0') then
+                              state   <= BUSWRITE;
+                           else
+                              state   <= BUSREADREQUEST;
+                              waitcnt <= 0;
+                           end if;
                         elsif (zn_system11 = '1' and mem_rnw = '1' and mem_addressData(28 downto 0) >= 16#1FC00000#) then -- S11 boot program DATA read
                            -- FIX 2026-06-16: use the PROVEN RAM uncached-read mechanism (live
                            -- data_ram_rotate + combinational mem_done, NO mem_dataRead_buf) instead

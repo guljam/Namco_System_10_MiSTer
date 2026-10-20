@@ -315,6 +315,12 @@ entity psx_mister is
       zn_gun2_y       : in  std_logic_vector(15 downto 0) := (others => '0');
       -- EEPROM/nvram (MRA index 9) load + save -> psx_top -> zn1_io
       -- Namco System 10 board bus + MEM board DDR3 client (see psx_top)
+      s10_exio        : in  std_logic := '0';   -- EXIO board fitted: 0x1FE00000-0x1FFFFFFF on the board bus
+      s10_gun_cross   : in  std_logic_vector(1 downto 0) := "00";   -- crosshair on, P2 & P1
+      s10_gun1_x      : in  unsigned(7 downto 0) := (others => '0'); -- aim, 0..255 across the picture
+      s10_gun1_y      : in  unsigned(7 downto 0) := (others => '0');
+      s10_gun2_x      : in  unsigned(7 downto 0) := (others => '0');
+      s10_gun2_y      : in  unsigned(7 downto 0) := (others => '0');
       s10_addr        : out std_logic_vector(23 downto 0) := (others => '0');
       s10_wdata       : out std_logic_vector(31 downto 0) := (others => '0');
       s10_wmask       : out std_logic_vector(3 downto 0) := (others => '0');
@@ -774,6 +780,12 @@ begin
       zn_gun1_y       => zn_gun1_y,
       zn_gun2_x       => zn_gun2_x,
       zn_gun2_y       => zn_gun2_y,
+      s10_exio        => s10_exio,
+      s10_gun_cross   => s10_gun_cross,
+      s10_gun1_x      => s10_gun1_x,
+      s10_gun1_y      => s10_gun1_y,
+      s10_gun2_x      => s10_gun2_x,
+      s10_gun2_y      => s10_gun2_y,
       s10_addr        => s10_addr,
       s10_wdata       => s10_wdata,
       s10_wmask       => s10_wmask,

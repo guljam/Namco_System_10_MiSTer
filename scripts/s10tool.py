@@ -34,6 +34,12 @@ BOARDS = {
         xor=0xAAAA, save_base=0x40000, save_size=0x10000,
         data=[("dr21ma1.1d", "26dc6f55", 0x1000000), ("dr21ma2.2d", "702556ff", 0x1000000)],
     ),
+    "ptblank3_family": dict(
+        board="N", crypt=2, nand_big=False,
+        perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x1, 0x0, 0x2, 0x3),
+        xor=0xAAAA, t2=ns10crypt.PTBLANK3, save_base=0x4200, save_size=0x4200,
+        exio=0x32, gun=True, category="Shooter", players=2,
+    ),
 }
 GAMES = {
     "mrdrilr2":  dict(name="Mr. Driller 2 (World, DR22 Ver.A)", parent=None, region="World", year=2000,
@@ -48,10 +54,18 @@ GAMES = {
                       nands=[("0.8e", "4b61ac62"), ("1.8d", "c87b5e86"), ("2.7e", "e0a9339f")],
                       perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x9, 0x8, 0xb, 0x4, 0x5, 0x6, 0x7, 0x0, 0x1, 0x3, 0x2),
                       xor=0xAAAA, t2=ns10crypt.MRDRILRG, save_base=0x4200, save_size=0x4200),
+    # MEM(N): 2 x K9F2808U0B, type-2 decrypter with the nonlinear bit table; EXIO(G) light-gun board
+    "ptblank3":  dict(name="Point Blank 3 (World, GNN2 Ver.A)", parent=None, region="World", year=2000,
+                      family="ptblank3_family", nands=[("gnn2vera_0.8e", "5ae03e23"), ("gnn2vera_1.8d", "82d2cfb5")]),
+    "gunbalina": dict(name="Gunbalina (Japan, GNN1 Ver.A)", parent="ptblank3", region="Japan", year=2000,
+                      family="ptblank3_family", nands=[("gnn1a.8e", "2371aaba"), ("gnn1a.8d", "6cd343e0")]),
 }
-MAIN = {"mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg"}
-ALT_DIR = {"mrdrilr2": "_Mr. Driller 2"}
+MAIN = {"mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
+        "ptblank3": "ptblank3", "gunbalina": "ptblank3"}
+ALT_DIR = {"mrdrilr2": "_Mr. Driller 2", "ptblank3": "_Point Blank 3"}
 BUTTONS = ("Drill,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")
+GUN_BUTTONS = ("Trigger,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")
+NL_OFF = 0x6400000               # nonlinear decrypter table in the DDR3 image (s10_loader NL_OFF)
 
 
 def game(setname):
@@ -73,9 +87,10 @@ def record(setname):
     r[7] = 1 if g.get("nand_big") else 0
     struct.pack_into("<H", r, 8, g["xor"])
     r[10:26] = bytes(g["perm"])
-    r[26] = 0xFF                                    # no EXIO board
-    struct.pack_into("<I", r, 28, g["save_base"])
+    r[26] = g.get("exio", 0xFF)                     # EXIO ident (0xFF = no expansion board)
     t2 = g.get("t2")
+    r[27] = (1 if t2 and "table" in t2 else 0) | (2 if g.get("gun") else 0)
+    struct.pack_into("<I", r, 28, g["save_base"])
     if t2:
         for j in range(16):
             struct.pack_into("<Q", r, 32 + 8 * j, t2["emask"][j])
@@ -84,6 +99,8 @@ def record(setname):
         struct.pack_into("<H", r, 288, t2["xmask"])
         struct.pack_into("<QQQQ", r, 424, t2["ac"], t2["ap"], t2["bc"], t2["bp"])
         struct.pack_into("<H", r, 456, t2["out"])
+        if "table" in t2:
+            struct.pack_into("<I", r, 460, t2["table"][2] * 8)
     return bytes(r)
 
 
@@ -101,6 +118,7 @@ def mra_text(setname):
          "  index 0  BIOS part of the first flash / NAND (descrambled by the core into SDRAM)",
          "  index 2  MEM board image -> DDR3 0x32000000 (fast loading)",
          "  index 3  MEM(M) data mask ROMs -> DDR3 0x32800000 (fast loading)",
+         f"  index 4  type-2 nonlinear bit table -> DDR3 0x{DDR3_IMG + NL_OFF:08X} (Point Blank 3 family)",
          f"  index 9  settings (nvram): image offset 0x{g['save_base']:X}, {g['save_size']} bytes",
          "-->",
          "<misterromdescription>",
@@ -112,12 +130,12 @@ def mra_text(setname):
           f"    <mameversion>{MAMEVER}</mameversion>",
           f"    <year>{g['year']}</year>",
           "    <manufacturer>Namco</manufacturer>",
-          "    <category>Puzzle</category>",
+          f"    <category>{g.get('category', 'Puzzle')}</category>",
           f"    <region>{g['region']}</region>",
           "    <players>2</players>",
-          "    <joystick>4-way</joystick>",
+          "    <joystick>" + ("lightgun" if g.get("gun") else "4-way") + "</joystick>",
           "    <rotation>horizontal</rotation>",
-          f"    <buttons names=\"{BUTTONS[0]}\" default=\"{BUTTONS[1]}\"/>",
+          f"    <buttons names=\"{(GUN_BUTTONS if g.get('gun') else BUTTONS)[0]}\" default=\"{(GUN_BUTTONS if g.get('gun') else BUTTONS)[1]}\"/>",
           "",
           "    <rom index=\"1\">",
           "        <!-- board record -->"]
@@ -146,6 +164,13 @@ def mra_text(setname):
         for n, c in g["nands"]:
             L.append(f"        <part name=\"{n}\" crc=\"{c}\"/>")
         L.append("    </rom>")
+        t2 = g.get("t2") or {}
+        if "table" in t2:
+            tn, tc, _ = t2["table"]
+            tz = f"{g['parent'] or setname}.zip"
+            L += [f"    <rom index=\"4\" zip=\"{tz}\" md5=\"None\" address=\"0x{DDR3_IMG + NL_OFF:08X}\">",
+                  f"        <part name=\"{tn}\" crc=\"{tc}\"/>",
+                  "    </rom>"]
     L += [f"    <nvram index=\"9\" size=\"{g['save_size']}\"/>",
           "</misterromdescription>"]
     return "\n".join(L) + "\n"
@@ -217,6 +242,9 @@ def build_images(setname, romdir):
         copy(0, 0x40, 0xE0)
         copy(0x20000, 0x120, 0x1F00)
         ddr = b"".join(nands)
+        t2 = g.get("t2") or {}
+        if "table" in t2:
+            ddr = ddr + bytes(NL_OFF - len(ddr)) + zs.get(*t2["table"][:2])
     return bytes(bios), bytes(ddr)
 
 

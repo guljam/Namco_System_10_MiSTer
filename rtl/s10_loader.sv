@@ -11,13 +11,15 @@
 //      Before the first word the whole 4 MB BIOS area is filled with 0x55 (MAME ROM_FILL).
 //   2  MEM(M) flash / MEM(N) NAND chips   -> DDR3 image +0
 //   3  MEM(M) data mask ROMs             -> DDR3 image +0x800000
+//   4  type-2 nonlinear bit table (MAME "decrypter:nonlinear_table", Point Blank 3) -> DDR3 image +NL_OFF
 //   9  nvram                             -> DDR3 image +save_base
-// Indexes 2/3 normally come by DDR3 fast loading (MRA address=): Main_MiSTer writes DDR3 itself and sends
+// Indexes 2/3/4 normally come by DDR3 fast loading (MRA address=): Main_MiSTer writes DDR3 itself and sends
 // only the length, so no ioctl_wr arrives. With older firmware the words arrive through ioctl and are written
 // to DDR3 here. The PSX is held in reset during downloads, so the writer owns the PSX DDR3 port (top level).
 module s10_loader #(
     parameter [26:0] BIOS_SDRAM = 27'h0400000,
-    parameter [27:0] IMG_BASE   = 28'h2000000     // DDR3 0x32000000
+    parameter [27:0] IMG_BASE   = 28'h2000000,    // DDR3 0x32000000
+    parameter [27:0] NL_OFF     = 28'h6400000     // nonlinear table: DDR3 0x38400000 (above the largest MEM(N) image)
 ) (
     input  wire         clk,                // clk_1x (hps_io clk_sys)
     input  wire         clk2,               // clk_2x (DDR3)
@@ -37,6 +39,9 @@ module s10_loader #(
     output wire [15:0]  data_xor,
     output reg  [63:0]  perm,
     output wire  [7:0]  exio_ident,
+    output wire         nl_table,           // record byte 27 bit 0: type-2 nonlinear term from the bit table
+    output wire         light_gun,          // record byte 27 bit 1: light guns on the EXIO board
+    output wire [20:0]  nl_bits,            // record bytes 460-463: table length in bits
     output wire [27:0]  save_base,
     output wire [1023:0] t2_emask,
     output wire [1023:0] t2_dmask,
@@ -77,7 +82,10 @@ module s10_loader #(
     assign nand_big    = rec[8*7 +: 8] == 8'd1;
     assign data_xor    = rec[8*8 +: 16];
     assign exio_ident  = rec[8*26 +: 8];
+    assign nl_table    = rec[8*27];
+    assign light_gun   = rec[8*27 + 1];
     assign save_base   = rec[8*28 +: 28];
+    assign nl_bits     = rec[8*460 +: 21];
     assign t2_emask    = rec[8*32  +: 1024];
     assign t2_dmask    = rec[8*160 +: 1024];
     assign t2_xmask    = rec[8*288 +: 16];
@@ -134,8 +142,9 @@ module s10_loader #(
         if (dl_rise) begin
             bios_dl <= (ioctl_index == 8'd0);
             rec_dl  <= (ioctl_index == 8'd1);
-            img_dl  <= (ioctl_index == 8'd2 || ioctl_index == 8'd3 || ioctl_index == 8'd9);
-            img_off <= (ioctl_index == 8'd3) ? 28'h800000 : (ioctl_index == 8'd9) ? save_base : 28'h0;
+            img_dl  <= (ioctl_index == 8'd2 || ioctl_index == 8'd3 || ioctl_index == 8'd4 || ioctl_index == 8'd9);
+            img_off <= (ioctl_index == 8'd3) ? 28'h800000 : (ioctl_index == 8'd4) ? NL_OFF :
+                       (ioctl_index == 8'd9) ? save_base : 28'h0;
             b_page  <= 16'h40;
             b_col   <= 0;
             acc_any <= 1'b0;

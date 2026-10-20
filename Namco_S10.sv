@@ -389,6 +389,10 @@ parameter CONF_STR = {
 	"H1P2O[116:112],CRT H-Size,0,+1,+2,+3,+4,+5,+6,+7,+8,+9,+10,-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"H1P2O[104:101],CRT H-Position,0,+4,+8,+12,+16,+20,+24,+28,-32,-28,-24,-20,-16,-12,-8,-4;",
 	"H1P2O[108:105],CRT V-Shift,0,+1,+2,+3,+4,+5,+6,+7,-8,-7,-6,-5,-4,-3,-2,-1;",
+	"H2P4,Light Gun;",
+	"H2P4-;",
+	"H2P4O[120],Gun aim P1,Joystick,Mouse;",
+	"H2P4O[121],Crosshair,Off,On;",
 	"P3,Hardware;",
 	"P3-;",
 	"P3O[64],Pause when OSD open,Off,On;",
@@ -413,7 +417,8 @@ wire [127:0] status;
 // Bit 0 hides the Light Gun OSD page (H0 prefix) for every game whose MRA does
 // not declare itself a gun game — light-gun support must not be offered to
 // games that don't natively have it.
-wire [15:0] status_menumask = {14'd0, ~status[96], 1'b0};   // H1: CRT Adjust items hidden while CRT Adjust is Off
+wire        b_light_gun;
+wire [15:0] status_menumask = {13'd0, ~b_light_gun, ~status[96], 1'b0};   // H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only
 wire        forced_scandoubler;
 reg  [31:0] sd_lba0 = 0;
 reg  [31:0] sd_lba1;
@@ -612,6 +617,9 @@ wire  [27:0] b_save_base;
 wire [1023:0] b_t2_emask, b_t2_dmask, b_t2_iv;
 wire  [15:0] b_t2_xmask, b_t2_nl_out;
 wire  [63:0] b_t2_nl_ac, b_t2_nl_ap, b_t2_nl_bc, b_t2_nl_bp;
+wire         b_nl_table;
+wire  [20:0] b_nl_bits;
+localparam [27:0] NL_OFF = 28'h6400000;     // nonlinear decrypter table in the DDR3 image (MRA index 4)
 
 wire        ld_dl_req;
 wire [26:0] ld_dl_addr;
@@ -627,7 +635,7 @@ wire [27:0] ld_ddr_addr;
 wire [63:0] ld_ddr_din;
 wire  [7:0] ld_ddr_be;
 
-s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000)) s10_loader
+s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000), .NL_OFF(NL_OFF)) s10_loader
 (
 	.clk           (clk_1x),
 	.clk2          (clk_2x),
@@ -654,6 +662,9 @@ s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000)) s10_loader
 	.t2_nl_bc      (b_t2_nl_bc),
 	.t2_nl_bp      (b_t2_nl_bp),
 	.t2_nl_out     (b_t2_nl_out),
+	.nl_table      (b_nl_table),
+	.light_gun     (b_light_gun),
+	.nl_bits       (b_nl_bits),
 	.record_ok     (b_record_ok),
 	.dl_req        (ld_dl_req),
 	.dl_addr       (ld_dl_addr),
@@ -965,6 +976,26 @@ wire        h8_illegal = 1'b0;
 wire psx_hs, psx_vs, psx_hbl, psx_vbl, psx_ce_pix, psx_interlace;
 wire [7:0] psx_r, psx_g, psx_b;
 
+// EXIO(G) light guns (Point Blank 3): aim from the MiSTer gun / analog stick or the mouse, trigger = button 1
+wire [7:0] gun_p1x, gun_p1y, gun_p2x, gun_p2y;
+wire [8:0] gun_x0, gun_y0, gun_x1, gun_y1;
+s10_gun s10_gun
+(
+	.clk       (clk_1x),
+	.src_mouse (status[120]),
+	.joy_a0    (joystick_analog_l0),
+	.joy_a1    (joystick_analog_l1),
+	.ps2_mouse (mouse),
+	.p1_x      (gun_p1x),
+	.p1_y      (gun_p1y),
+	.p2_x      (gun_p2x),
+	.p2_y      (gun_p2y),
+	.x0        (gun_x0),
+	.y0        (gun_y0),
+	.x1        (gun_x1),
+	.y1        (gun_y1)
+);
+
 s10_io s10_io
 (
 	.clk        (clk_1x),
@@ -979,6 +1010,10 @@ s10_io s10_io
 	.dsw        (s10_dsw),
 	.in1        (s10_in1),
 	.exio_ident (b_exio_ident),
+	.gun_x0     (gun_x0),
+	.gun_y0     (gun_y0),
+	.gun_x1     (gun_x1),
+	.gun_y1     (gun_y1),
 	.irq10      (s10_irq10)
 );
 
@@ -1004,6 +1039,9 @@ s10_mem s10_mem
 	.t2_nl_bc       (b_t2_nl_bc),
 	.t2_nl_bp       (b_t2_nl_bp),
 	.t2_nl_out      (b_t2_nl_out),
+	.t2_nl_table    (b_nl_table),
+	.t2_nl_bits     (b_nl_bits),
+	.nl_off         (NL_OFF),
 	.addr           (s10_addr),
 	.wdata          (s10_wdata),
 	.wmask          (s10_wmask),
@@ -1355,6 +1393,12 @@ psx
    .s10_rdata      (s10_io_rdata | s10_mem_rdata),
    .s10_stall      (s10_stall),
    .s10_irq10      (s10_irq10),
+   .s10_exio       (b_exio_ident != 8'hFF),
+   .s10_gun_cross  ({2{b_light_gun & status[121]}}),
+   .s10_gun1_x     (gun_p1x),
+   .s10_gun1_y     (gun_p1y),
+   .s10_gun2_x     (gun_p2x),
+   .s10_gun2_y     (gun_p2y),
    .s10_ddr_request(s10_ddr_request),
    .s10_ddr_ack    (s10_ddr_ack),
    .s10_ddr_burstcnt(s10_ddr_burstcnt),

@@ -12,6 +12,11 @@
 //   BA0012/14/16/18 W  interrupt acknowledge, bit 0/1/2/3
 //   BA001A R   interrupt status: bit 3 = I/O update (100 Hz), bit 2 = CD-ROM, bit 1 = EXIO
 //   BF0000 R   CD-ROM present probe: 1
+// EXIO(G) light-gun board (exio_ident != 0xFF; MAME namcos10_map_exio_inner, mirrored at 0x1FE00000):
+//   E80000/E88000 R  P1 X bits 5-0 / 21-6     E90000/E98000 R  P1 Y bits 5-0 / 21-6
+//   EA0000/EA8000 R  P2 X                     EB0000/EB8000 R  P2 Y
+//   E50000/E58000 R  EXIO_IN1/2 (all unused: 0xFFFF); other EXIO addresses read 0, writes are ignored
+//   (lamps / coin counters at E40000-E48000, gun re-arm at EC0000/EC8000).
 //   B20000, B60000 (watchdog), BC0000 (ATA): ignored / read 0
 // A 100 Hz timer sets status bit 3 and pulses IRQ10 (MAME io_update_interrupt_callback).
 module s10_io #(
@@ -31,6 +36,8 @@ module s10_io #(
     input  wire  [7:0] dsw,             // DIP switches, 1 = on
     input  wire [31:0] in1,             // IN1, active low, MAME bit layout
     input  wire  [7:0] exio_ident,      // 0xFF = no expansion board
+    input  wire  [8:0] gun_x0, gun_y0,  // light-gun positions (MAME EXIO_LIGHTGUN ports: X 0..319, Y 0..239)
+    input  wire  [8:0] gun_x1, gun_y1,
 
     output reg         irq10 = 1'b0     // IRQ10 request (one clock pulse)
 );
@@ -95,6 +102,15 @@ module s10_io #(
             24'hBA000A: rd16 = {15'd0, bus_dat};
             24'hBA001A: rd16 = {12'd0, intst};
             24'hBF0000: rd16 = 16'h0001;
+            24'hE50000, 24'hE50002, 24'hE58000, 24'hE58002: rd16 = 16'hFFFF;
+            24'hE80000, 24'hE80002: rd16 = {10'd0, gun_x0[5:0]};
+            24'hE88000, 24'hE88002: rd16 = {13'd0, gun_x0[8:6]};
+            24'hE90000, 24'hE90002: rd16 = {10'd0, gun_y0[5:0]};
+            24'hE98000, 24'hE98002: rd16 = {13'd0, gun_y0[8:6]};
+            24'hEA0000, 24'hEA0002: rd16 = {10'd0, gun_x1[5:0]};
+            24'hEA8000, 24'hEA8002: rd16 = {13'd0, gun_x1[8:6]};
+            24'hEB0000, 24'hEB0002: rd16 = {10'd0, gun_y1[5:0]};
+            24'hEB8000, 24'hEB8002: rd16 = {13'd0, gun_y1[8:6]};
             default:    rd16 = 16'h0000;
         endcase
     endfunction
@@ -102,7 +118,8 @@ module s10_io #(
     wire [23:0] a_lo = {addr[23:2], 2'b00};
     wire [23:0] a_hi = {addr[23:2], 2'b10};
     wire        sel  = (addr[23:16] == 8'hBA) || (addr[23:16] == 8'hBF) || (addr[23:16] == 8'hB2) ||
-                       (addr[23:16] == 8'hB6) || (addr[23:16] == 8'hBC);
+                       (addr[23:16] == 8'hB6) || (addr[23:16] == 8'hBC) ||
+                       (addr[23:21] == 3'b111 && exio_ident != 8'hFF);      // EXIO window 0xE00000-0xFFFFFF
 
     always @(posedge clk) begin
         irq10 <= 1'b0;

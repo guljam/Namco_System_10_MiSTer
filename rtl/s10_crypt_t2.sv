@@ -10,6 +10,11 @@
 //              ^ (A & B & nl_out[j])
 //   A = ^((nl_ac & C') ^ (nl_ap & P'))     B = ^((nl_bc & C') ^ (nl_bp & P'))
 //
+// Table form (MAME ns10_type2_decrypter_nonlinear_device, Point Blank 3 / Gunbalina): with nl_tab_en the
+// nonlinear term is nl_out * nl_tab_bit instead of nl_out * (A & B); nl_tab_bit is the next bit of the
+// game's recorded bit stream (MSB first per byte), supplied by the caller, which advances its cursor on
+// every consumed word (word_valid && active).
+//
 // activate (pulse) with iv: C = ivtab[iv], P = 0, mask = 0, active = 1.
 // deactivate (pulse): active = 0.
 //
@@ -44,6 +49,8 @@ module s10_crypt_t2 (
     input  wire [63:0]   nl_bc,
     input  wire [63:0]   nl_bp,
     input  wire [15:0]   nl_out,
+    input  wire          nl_tab_en,
+    input  wire          nl_tab_bit,
 
     input  wire          activate,
     input  wire [3:0]    iv,
@@ -77,7 +84,8 @@ endgenerate
 wire nl_a = ^(nl_ac & c_next) ^ ^(nl_ap & p_next);
 wire nl_b = ^(nl_bc & c_next) ^ ^(nl_bp & p_next);
 
-wire [15:0] mask_next = lin ^ xmask ^ (nl_out & {16{nl_a & nl_b}});
+wire        nl_term   = nl_tab_en ? nl_tab_bit : (nl_a & nl_b);
+wire [15:0] mask_next = lin ^ xmask ^ (nl_out & {16{nl_term}});
 
 wire [63:0] iv_sel = ivtab[iv*64 +: 64];
 /* verilator lint_off UNUSEDSIGNAL */

@@ -39,7 +39,10 @@ architecture sim of tb_s10 is
          wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0);
          dsw : in std_logic_vector(7 downto 0); in1 : in std_logic_vector(31 downto 0);
-         exio_ident : in std_logic_vector(7 downto 0); irq10 : out std_logic
+         exio_ident : in std_logic_vector(7 downto 0);
+         gun_x0 : in std_logic_vector(8 downto 0); gun_y0 : in std_logic_vector(8 downto 0);
+         gun_x1 : in std_logic_vector(8 downto 0); gun_y1 : in std_logic_vector(8 downto 0);
+         irq10 : out std_logic
       );
    end component;
 
@@ -55,6 +58,8 @@ architecture sim of tb_s10 is
          t2_nl_ac : in std_logic_vector(63 downto 0); t2_nl_ap : in std_logic_vector(63 downto 0);
          t2_nl_bc : in std_logic_vector(63 downto 0); t2_nl_bp : in std_logic_vector(63 downto 0);
          t2_nl_out : in std_logic_vector(15 downto 0);
+         t2_nl_table : in std_logic; t2_nl_bits : in std_logic_vector(20 downto 0);
+         nl_off : in std_logic_vector(27 downto 0);
          addr : in std_logic_vector(23 downto 0); wdata : in std_logic_vector(31 downto 0);
          wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0); stall : out std_logic;
@@ -87,6 +92,7 @@ architecture sim of tb_s10 is
          t2_nl_ac : out std_logic_vector(63 downto 0); t2_nl_ap : out std_logic_vector(63 downto 0);
          t2_nl_bc : out std_logic_vector(63 downto 0); t2_nl_bp : out std_logic_vector(63 downto 0);
          t2_nl_out : out std_logic_vector(15 downto 0); record_ok : out std_logic;
+         nl_table : out std_logic; light_gun : out std_logic; nl_bits : out std_logic_vector(20 downto 0);
          dl_req : out std_logic; dl_addr : out std_logic_vector(26 downto 0); dl_data : out std_logic_vector(31 downto 0);
          dl_done : in std_logic; fill_start : out std_logic; fill_base : out std_logic_vector(26 downto 0);
          fill_words : out std_logic_vector(20 downto 0); fill_value : out std_logic_vector(31 downto 0);
@@ -172,6 +178,8 @@ architecture sim of tb_s10 is
    signal b_crypt : std_logic_vector(1 downto 0);
    signal b_nand_count : std_logic_vector(4 downto 0);
    signal b_data_xor, b_t2_xmask, b_t2_nl_out : std_logic_vector(15 downto 0);
+   signal b_nl_table, b_light_gun, s10_exio_on : std_logic;
+   signal b_nl_bits : std_logic_vector(20 downto 0);
    signal b_perm, b_t2_nl_ac, b_t2_nl_ap, b_t2_nl_bc, b_t2_nl_bp : std_logic_vector(63 downto 0);
    signal b_exio : std_logic_vector(7 downto 0);
    signal b_save_base : std_logic_vector(27 downto 0);
@@ -233,13 +241,16 @@ begin
       );
 
    s10_rdata <= io_rdata or mem_rdata;
+   s10_exio_on <= '1' when b_exio /= x"FF" else '0';
 
    iio : s10_io
       port map (
          clk => clk1x, reset => psx_reset,
          addr => s10_addr, wdata => s10_wdata, wmask => s10_wmask, size => s10_size,
          rd => s10_rd, wr => s10_wr, rdata => io_rdata,
-         dsw => x"00", in1 => tb_in1, exio_ident => b_exio, irq10 => s10_irq10
+         dsw => x"00", in1 => tb_in1, exio_ident => b_exio,
+         gun_x0 => '0' & x"A0", gun_y0 => '0' & x"78", gun_x1 => '0' & x"A0", gun_y1 => '0' & x"78",
+         irq10 => s10_irq10
       );
 
    imem : s10_mem
@@ -250,6 +261,7 @@ begin
          t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
          t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
          t2_nl_out => b_t2_nl_out,
+         t2_nl_table => b_nl_table, t2_nl_bits => b_nl_bits, nl_off => x"6400000",
          addr => s10_addr, wdata => s10_wdata, wmask => s10_wmask, size => s10_size,
          rd => s10_rd, wr => s10_wr, rdata => mem_rdata, stall => s10_stall,
          rdma_start => rdma_start, rdma_valid => rdma_valid, rdma_pop => rdma_pop, rdma_data => rdma_data,
@@ -271,6 +283,7 @@ begin
          t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
          t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
          t2_nl_out => b_t2_nl_out, record_ok => b_record_ok,
+         nl_table => b_nl_table, light_gun => b_light_gun, nl_bits => b_nl_bits,
          dl_req => open, dl_addr => open, dl_data => open, dl_done => '0',
          fill_start => open, fill_base => open, fill_words => open, fill_value => open, fill_busy => '0',
          ddr_own => open, ddr_we => open, ddr_addr => open, ddr_din => open, ddr_be => open, ddr_busy => '0'
