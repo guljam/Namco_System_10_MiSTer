@@ -186,7 +186,7 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
 
-assign LED_USER  = ioctl_download;
+assign LED_USER  = rom_download;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
@@ -393,18 +393,10 @@ parameter CONF_STR = {
 	"H2P4-;",
 	"H2P4O[120],Gun aim P1,Joystick,Mouse;",
 	"H2P4O[121],Crosshair,Off,On;",
+	"DIP;",
 	"P3,Hardware;",
 	"P3-;",
 	"P3O[64],Pause when OSD open,Off,On;",
-	"P3-;",
-	"P3O[87],DIP SW1-1,Off,On;",
-	"P3O[86],DIP SW1-2,Off,On;",
-	"P3O[85],DIP SW1-3,Off,On;",
-	"P3O[84],DIP SW1-4,Off,On;",
-	"P3O[83],DIP SW1-5,Off,On;",
-	"P3O[82],DIP SW1-6,Off,On;",
-	"P3O[81],DIP SW1-7,Off,On;",
-	"P3O[80],DIP SW1-8,Off,On;",
 	"-;",
 	"R0,Reset;",
 	"J1,Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3,Button 4,Button 5,Button 6;",
@@ -440,6 +432,7 @@ wire [26:0] ioctl_addr;
 wire [15:0] ioctl_dout;
 wire        ioctl_wr;
 wire  [7:0] ioctl_index;
+wire        rom_download = ioctl_download && ioctl_index != 8'd254;   // index 254 = MRA DIP switches
 // nvram (MEM board settings block in the DDR3 image) save path
 wire        ioctl_upload;
 wire [15:0] ioctl_din;
@@ -592,7 +585,7 @@ localparam BIOS_START = 27'h0400000;
 wire        exe_download  = 1'b0;
 wire        code_download = 1'b0;
 reg         cart_loaded  = 0;
-always @(posedge clk_1x) if (ioctl_download && ioctl_index == 8'd0) cart_loaded <= 1;
+always @(posedge clk_1x) if (rom_download && ioctl_index == 8'd0) cart_loaded <= 1;
 
 wire hasCD = 1'b0;
 wire loadExe = 1'b0;
@@ -639,7 +632,7 @@ s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000), .NL_OFF(NL_OFF)) s
 (
 	.clk           (clk_1x),
 	.clk2          (clk_2x),
-	.ioctl_download(ioctl_download),
+	.ioctl_download(rom_download),
 	.ioctl_index   (ioctl_index),
 	.ioctl_wr      (ioctl_wr),
 	.ioctl_addr    (ioctl_addr),
@@ -691,7 +684,7 @@ reg        clr_run     = 0;
 reg [15:0] clr_settle  = 0;
 always @(posedge clk_1x) begin
 	clr_start <= 0;
-	if (ioctl_download) begin
+	if (rom_download) begin
 		dl_seen     <= 1;
 		clr_settle  <= 0;
 		ram_cleared <= 0;
@@ -705,7 +698,7 @@ always @(posedge clk_1x) begin
 	if (clr_run && !clr_start && !fill_busy) begin clr_run <= 0; ram_cleared <= 1; end
 end
 
-wire reset_or = RESET | buttons[1] | status[0] | ioctl_download | ~ram_cleared | clr_start | clr_run;
+wire reset_or = RESET | buttons[1] | status[0] | rom_download | ~ram_cleared | clr_start | clr_run;
 
 ///////////////////////////  SAVESTATE  /////////////////////////////////
 
@@ -967,7 +960,11 @@ wire [31:0] s10_in1 = ~{joy[8] | joy2[8],              // b31 SERVICE1
                         joy[14], joy[13], joy[12],     // b19-17 P1 buttons 6-4
                         1'b0,                          // b16 unused
                         in_p2, in_p1};
-wire  [7:0] s10_dsw = status[87:80];                   // DSW1 1-8 (1 = on)
+// DSW1 from the MRA <switches> (ioctl index 254): the byte is MAME's SYSTEM port bits 7-0 (active low,
+// SW1:1 = bit 7 ... SW1:8 = bit 0); all off (0xFF) when the MRA has no switches
+reg  [7:0] dsw_mra = 8'hFF;
+always @(posedge clk_1x) if (ioctl_download && ioctl_index == 8'd254 && ioctl_wr && ioctl_addr == 0) dsw_mra <= ioctl_dout[7:0];
+wire  [7:0] s10_dsw = ~dsw_mra;                        // s10_io: 1 = on
 
 wire [23:0] h8_pc = 24'd0;                             // (System 12 debug probes, unused)
 wire        h8_illegal = 1'b0;
@@ -1763,7 +1760,7 @@ reg  [8:0] ld_v = 0;
 reg  [2:0] ld_div = 0;
 reg        ld_ce = 0, ld_hs = 0, ld_vs = 0, ld_hbl = 1, ld_vbl = 1;
 always @(posedge clk_vid) begin
-	ld_sync <= {ld_sync[0], ioctl_download};
+	ld_sync <= {ld_sync[0], rom_download};
 	ld_div  <= (ld_h == 12'd3412) ? 3'd0 : ld_div + 1'd1;
 	ld_ce   <= (ld_div == 3'd0);
 	if (ld_h == 12'd3412) begin

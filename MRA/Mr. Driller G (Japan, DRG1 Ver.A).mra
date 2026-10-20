@@ -24,6 +24,17 @@
     <rotation>horizontal</rotation>
     <buttons names="Drill,Start,Coin,Test,Service,Pause" default="A,Start,Select,L,R,R3"/>
 
+    <switches default="FF">
+        <dip name="SW1-1" bits="7" ids="On,Off"/>
+        <dip name="SW1-2" bits="6" ids="On,Off"/>
+        <dip name="SW1-3" bits="5" ids="On,Off"/>
+        <dip name="SW1-4" bits="4" ids="On,Off"/>
+        <dip name="SW1-5" bits="3" ids="On,Off"/>
+        <dip name="SW1-6" bits="2" ids="On,Off"/>
+        <dip name="SW1-7" bits="1" ids="On,Off"/>
+        <dip name="SW1-8" bits="0" ids="On,Off"/>
+    </switches>
+
     <rom index="1">
         <!-- board record -->
         <part>53 31 30 42 01 02 03 00 AA AA 0E 0C 0F 0D 0A 09 08 0B 04 05 06 07 00 01 03 02 FF 00 00 42 00 00</part>

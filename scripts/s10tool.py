@@ -39,6 +39,18 @@ BOARDS = {
         perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x1, 0x0, 0x2, 0x3),
         xor=0xAAAA, t2=ns10crypt.PTBLANK3, save_base=0x4200, save_size=0x4200,
         exio=0x32, gun=True, category="Shooter", players=2,
+        buttons=("Trigger,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3"), joystick="lightgun",
+        dips=[("Service Mode", "7", None, "On,Off")],
+    ),
+    "gamshara_family": dict(
+        board="N", crypt=2, nand_big=False,
+        perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x0, 0x1, 0x2, 0x3),
+        xor=0xAAAA, t2=ns10crypt.GAMSHARA, save_base=0x4200, save_size=0x4200,
+        manufacturer="Mitchell", category="Action", joystick="8-way",
+        buttons=("Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3", "A,Start,Select,L,R,R3,B,X"),
+        # MAME: the region is a 7-bit code on SW1:8-2, only 0x6E selects World (English); read at boot
+        dips=[("Region", "0,6", "110,127", "World,Japan"), ("Service Mode", "7", None, "On,Off")],
+        dip_default=0xEE,
     ),
 }
 GAMES = {
@@ -59,12 +71,63 @@ GAMES = {
                       family="ptblank3_family", nands=[("gnn2vera_0.8e", "5ae03e23"), ("gnn2vera_1.8d", "82d2cfb5")]),
     "gunbalina": dict(name="Gunbalina (Japan, GNN1 Ver.A)", parent="ptblank3", region="Japan", year=2000,
                       family="ptblank3_family", nands=[("gnn1a.8e", "2371aaba"), ("gnn1a.8d", "6cd343e0")]),
+    # MEM(N): 2 x K9F2808U0B, KEYCUS KC020A, type-2 decrypter (Mitchell)
+    "gamshara":  dict(name="Gamshara (20020912A, 10021 Ver.A)", parent=None, region="World", year=2002,
+                      family="gamshara_family", nands=[("10021a_e.8e", "1413b7d2"), ("10021a.8d", "73669ff7")]),
+    "gamsharao": dict(name="Gamshara (20020716A, 10021 Ver.A)", parent="gamshara", region="World", year=2002,
+                      family="gamshara_family", nands=[("10021a.8e", "6c0361fc"), ("10021a.8d", "73669ff7")]),
+    # MEM(N): 2 x K9F2808U0B, KEYCUS KC034A (a reprogrammed Gamshara board), type-2 decrypter (Mitchell)
+    "konotako":  dict(name="Kono e Tako (10021 Ver.A)", parent=None, region="Japan", year=2003,
+                      board="N", crypt=2, nand_big=False, nands=[("0.8e", "63d23a0c"), ("1.8d", "bdbed53c")],
+                      perm=(0xe, 0xf, 0xc, 0xd, 0x8, 0x9, 0xb, 0xa, 0x5, 0x4, 0x7, 0x6, 0x0, 0x1, 0x3, 0x2),
+                      xor=0xAAAA, t2=ns10crypt.KONOTAKO, save_base=0x4200, save_size=0x4200,
+                      manufacturer="Mitchell", category="Puzzle", joystick="8-way",
+                      buttons=("Button 1,Start,Coin,Test,Service,Pause,Button 2", "A,Start,Select,L,R,R3,B"),
+                      dips=[("Region", "0", None, "Export (Cristaltec),Japan")] +
+                           [(f"SW1-{n}", str(8 - n), None, "On,Off") for n in range(1, 8)]),
+    # ---- MEM(N) games that need no new hardware (parameters from MAME via mame_s10_import.py); untested
+    "gjspace":   dict(name="GekiToride-Jong Space (10011 Ver.A)", parent=None, region="Japan", year=2001,
+                      board="N", crypt=2, nand_big=False,
+                      nands=[("10011.8e", "c581bca7"), ("10011.8d", "7fb4a3fe"), ("10011.7e", "31bfc843"), ("10011.7d", "15d83649")],
+                      perm=(0x8, 0xa, 0x6, 0x5, 0x7, 0xe, 0x4, 0xf, 0xd, 0x9, 0x1, 0x0, 0x2, 0xb, 0xc, 0x3),
+                      xor=0xAAAA, t2=ns10crypt.GJSPACE, save_base=0x4200, save_size=0x4200,
+                      manufacturer="Namco / Metro", category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X'),
+                      dips=[(f"SW1-{k}", str(8 - k), None, "On,Off") for k in range(2, 9)] + [("Service Mode", "7", None, "On,Off")]),
+    "knpuzzle":  dict(name="Kotoba no Puzzle Mojipittan (Japan, KPM1 Ver.A)", parent=None, region="Japan", year=2001,
+                      board="N", crypt=2, nand_big=False,
+                      nands=[("kpm1vera_0.8e", "4b4255da"), ("kpm1vera_1.8d", "644595a6"), ("kpm1vera_2.7e", "6bf164e5")],
+                      perm=(0xe, 0xf, 0xc, 0xd, 0xa, 0x8, 0xb, 0x9, 0x4, 0x5, 0x6, 0x7, 0x1, 0x3, 0x0, 0x2),
+                      xor=0xAAAA, t2=ns10crypt.KNPUZZLE, save_base=0x4200, save_size=0x4200,
+                      category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+    "chocovdr":  dict(name="Uchuu Daisakusen: Chocovader Contactee (Japan, CVC1 Ver.A)", parent=None, region="Japan", year=2002,
+                      board="N", crypt=2, nand_big=False,
+                      nands=[("0.8e", "330d86d3"), ("1.8d", "4aecd6fc"), ("2.7e", "ac212e5a"), ("3.7d", "907d3d15"), ("4.6e", "1ed957dd")],
+                      perm=(0xd, 0xc, 0xe, 0xf, 0x9, 0x8, 0xa, 0xb, 0x4, 0x7, 0x6, 0x5, 0x0, 0x3, 0x2, 0x1),
+                      xor=0xAAAA, t2=ns10crypt.CHOCOVDR, save_base=0x4200, save_size=0x4200,
+                      category="Action", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+    "panikuru":  dict(name="Panikuru Panekuru (Japan, PPA1 Ver.A)", parent=None, region="Japan", year=2002,
+                      board="N", crypt=2, nand_big=False,
+                      nands=[("0.8e", "a68b0965"), ("1.8d", "18e5135d"), ("2.7e", "cd3b25e0")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0x8, 0x9, 0xa, 0xb, 0x4, 0x7, 0x6, 0x5, 0x1, 0x0, 0x3, 0x2),
+                      xor=0xAAAA, t2=ns10crypt.PANIKURU, save_base=0x4200, save_size=0x4200,
+                      category="Puzzle", joystick="8-way", buttons=('Button 1,Start,Coin,Test,Service,Pause,Button 2,Button 3', 'A,Start,Select,L,R,R3,B,X')),
+    "startrgn":  dict(name="Star Trigon (Japan, STT1 Ver.A)", parent=None, region="Japan", year=2002,
+                      board="N", crypt=2, nand_big=False,
+                      nands=[("stt1a_0.bin", "1e090644"), ("stt1a_1.bin", "aa527694")],
+                      perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0xb, 0x8, 0xa, 0x4, 0x5, 0x6, 0x7, 0x0, 0x3, 0x2, 0x1),
+                      xor=0xAAAA, t2=ns10crypt.STARTRGN, save_base=0x4200, save_size=0x4200,
+                      category="Puzzle", joystick="8-way", players=1,
+                      buttons=("Button 1,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")),
 }
 MAIN = {"mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
-        "ptblank3": "ptblank3", "gunbalina": "ptblank3"}
-ALT_DIR = {"mrdrilr2": "_Mr. Driller 2", "ptblank3": "_Point Blank 3"}
+        "ptblank3": "ptblank3", "gunbalina": "ptblank3", "gamshara": "gamshara", "gamsharao": "gamshara",
+        "konotako": "konotako", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
+        "panikuru": "panikuru", "startrgn": "startrgn"}
+ALT_DIR = {"mrdrilr2": "_Mr. Driller 2", "ptblank3": "_Point Blank 3", "gamshara": "_Gamshara"}
 BUTTONS = ("Drill,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")
-GUN_BUTTONS = ("Trigger,Start,Coin,Test,Service,Pause", "A,Start,Select,L,R,R3")
+# DIP switches (MRA <switches>, ioctl index 254): one byte = MAME's SYSTEM port bits 7-0, active low,
+# SW1:1 = bit 7 ... SW1:8 = bit 0. Games without named switches get SW1-1..8.
+GENERIC_DIPS = [(f"SW1-{n}", str(8 - n), None, "On,Off") for n in range(1, 9)]
 NL_OFF = 0x6400000               # nonlinear decrypter table in the DDR3 image (s10_loader NL_OFF)
 
 
@@ -129,13 +192,19 @@ def mra_text(setname):
     L += [f"    <rbf>{CORE}</rbf>",
           f"    <mameversion>{MAMEVER}</mameversion>",
           f"    <year>{g['year']}</year>",
-          "    <manufacturer>Namco</manufacturer>",
+          f"    <manufacturer>{g.get('manufacturer', 'Namco')}</manufacturer>",
           f"    <category>{g.get('category', 'Puzzle')}</category>",
           f"    <region>{g['region']}</region>",
-          "    <players>2</players>",
-          "    <joystick>" + ("lightgun" if g.get("gun") else "4-way") + "</joystick>",
+          f"    <players>{g.get('players', 2)}</players>",
+          f"    <joystick>{g.get('joystick', '4-way')}</joystick>",
           "    <rotation>horizontal</rotation>",
-          f"    <buttons names=\"{(GUN_BUTTONS if g.get('gun') else BUTTONS)[0]}\" default=\"{(GUN_BUTTONS if g.get('gun') else BUTTONS)[1]}\"/>",
+          f"    <buttons names=\"{g.get('buttons', BUTTONS)[0]}\" default=\"{g.get('buttons', BUTTONS)[1]}\"/>",
+          "",
+          f"    <switches default=\"{g.get('dip_default', 0xFF):02X}\">"]
+    for name, bits, values, ids in g.get("dips", GENERIC_DIPS):
+        v = f" values=\"{values}\"" if values else ""
+        L.append(f"        <dip name=\"{name}\" bits=\"{bits}\"{v} ids=\"{ids}\"/>")
+    L += ["    </switches>",
           "",
           "    <rom index=\"1\">",
           "        <!-- board record -->"]
@@ -177,7 +246,8 @@ def mra_text(setname):
 
 
 def mra_path(setname):
-    g = GAMES[setname]
+    g = dict(GAMES[setname])
+    g["name"] = g["name"].replace(":", " -")              # file name (MiSTer shows <name> from the file)
     if MAIN[setname] == setname:
         return os.path.join(ROOT, "MRA", g["name"] + ".mra")
     return os.path.join(ROOT, "MRA", "_alternatives", ALT_DIR[MAIN[setname]], g["name"] + ".mra")
