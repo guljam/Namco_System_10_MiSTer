@@ -15,11 +15,11 @@ for m in re.finditer(r"^\s+([A-Za-z0-9_]+)\s*:\s*(in|out|buffer|inout)\s+([^;:=]
 CONN = {
     "clk1x": "clk1x", "clk2x": "clk2x", "clk2xIndex": "clk2xIndex", "clkvid": "clkvid", "ce": "'1'", "reset": "reset",
     "videoout_on": "'1'", "DMA_GPU_writeEna": "dma_we", "DMA_GPU_write": "dma_word", "gpu_dmaRequest": "dma_req",
-    "dmaOn": "dma_on", "DMA_GPU_waiting": "'0'",
+    "dmaOn": "dma_on", "DMA_GPU_waiting": "dma_on",
     "vram_BUSY": "DDRAM_BUSY", "vram_DOUT": "DDRAM_DOUT", "vram_DOUT_READY": "DDRAM_DOUT_READY",
     "vram_BURSTCNT": "DDRAM_BURSTCNT", "vram_ADDR": "vram_ADDR", "vram_DIN": "DDRAM_DIN", "vram_BE": "DDRAM_BE",
     "vram_WE": "DDRAM_WE", "vram_RD": "DDRAM_RD", "gpustat_out": "gpustat", "bus_addr": "bus_addr",
-    "bus_dataWrite": "bus_dw", "bus_write": "bus_wr",
+    "bus_dataWrite": "bus_dw", "bus_write": "bus_wr", "bus_read": "bus_rd", "bus_dataRead": "bus_dr", "bus_stall": "bus_stall",
 }
 def tie(t):
     t = t.lower()

@@ -25,6 +25,7 @@ entity gpu is
       -- sit 2 bits higher than the retail PSX GPU (gputype 2) this core models. When '1',
       -- parse E3/E4/E5 draw area+offset and GP1(05) display-start Y from the +2 positions.
       gpuType1             : in  std_logic := '0';
+      frame_busy           : out std_logic;           -- System 10: commands queued / drawing / DMA2 feeding (memorymux holds GP1(01))
       interlaced480pHack   : in  std_logic;
       REPRODUCIBLEGPUTIMING: in  std_logic;
       videoout_on          : in  std_logic;
@@ -403,6 +404,11 @@ architecture arch of gpu is
    signal drawingOffsetX            : signed(10 downto 0) := (others => '0');
    signal drawingOffsetY            : signed(10 downto 0) := (others => '0');
    signal interlacedDrawing         : std_logic;
+   -- 480i drawing with "draw to displayed field" off skips the lines of the field on screen. The drawing field
+   -- follows the display only while the GPU is idle (no command, fifo empty, pipeline idle, no GPU DMA), so a
+   -- frame that runs past the next field flip finishes in its own field instead of splitting across both
+   -- (System 10's GPU never overruns: it draws 1.5x faster from SGRAM).
+   signal drawLineLSB               : std_logic := '0';
       
    -- FIFO IN  
    signal fifoIn_reset              : std_logic; 
@@ -649,6 +655,14 @@ architecture arch of gpu is
    signal pipeline_reqVRAMXPos      : unsigned(9 downto 0);
    signal pipeline_reqVRAMYPos      : unsigned(9 downto 0);
    signal pipeline_reqVRAMSize      : unsigned(10 downto 0);
+   signal pipeline_reqVRAMRows      : unsigned(1 downto 0);
+   signal pipeline_reqVRAMStep      : signed(2 downto 0);
+   -- System 10 multi-row texture fetch (gpu_pixelpipeline): further row reads still to issue / still to receive
+   signal reqVRAMrowsIssue          : unsigned(1 downto 0) := (others => '0');
+   signal reqVRAMrowsData           : unsigned(1 downto 0) := (others => '0');
+   signal reqVRAMrowStep            : unsigned(9 downto 0) := (others => '0');
+   signal reqVRAMrowY               : unsigned(9 downto 0) := (others => '0');
+   signal reqVRAMrowBeats           : unsigned(7 downto 0) := (others => '0');
    -- high-Y VRAM-fetch diagnostic (JTAG mode E): max/last pixel-pipeline texture+CLUT fetch Y, max X
    signal dbg_pipeReqY_max          : unsigned(9 downto 0) := (others => '0');
    signal dbg_pipeReqY_last         : unsigned(9 downto 0) := (others => '0');
@@ -997,6 +1011,8 @@ begin
    GPUSTAT(26)             <= (not fifoIn_NearFull) when (gpuType1 = '1') else
                               (GPUSTAT_ReadyRecCmd and ((not gpu_dmaRequest) or (not DMA_GPU_waiting)));
    GPUSTAT(27)             <= GPUSTAT_ReadySendVRAM;
+
+frame_busy  <= '1' when (proc_idle = '0' or fifoIn_Empty = '0' or DMA_GPU_waiting = '1') else '0';
    GPUSTAT(28)             <= GPUSTAT_ReadyRecDMA;
    GPUSTAT(30 downto 29)   <= GPUSTAT_DMADirection;
    GPUSTAT(31)             <= videoout_reports.GPUSTAT_DrawingOddline;
@@ -1076,6 +1092,10 @@ begin
          
             bus_dataRead <= (others => '0');
             softReset    <= '0';
+
+            if (proc_idle = '1' and fifoIn_Empty = '1' and fifoIn_Valid = '0' and pipeline_busy = '0' and DMA_GPU_waiting = '0') then
+               drawLineLSB <= videoout_reports.activeLineLSB;
+            end if;
             
             -- bus read
             if (bus_read = '1') then
@@ -1116,17 +1136,21 @@ begin
                         fifoIn_reset <= '1'; 
                         
                      when 16#01# => -- clear fifo
+                        -- System 10: memorymux only lets this through once the GPU has finished (gpu_frame_busy),
+                        -- as on the board, so the reset below finds an idle GPU (retail PSX semantics restored).
+if (gpuType1 = '0') then
+                           fifoIn_reset <= '1';
+                           drawer_reset <= '1';
+                        end if;
                         -- gputype1 (System 11 CXD8538Q): MAME treats GP1(01) as a packet-framing
                         -- reset ONLY (n_gpu_buffer_offset=0) — queued/in-progress work is NOT
                         -- destroyed, and Tekken sends GP1(01) every frame while the (slower) FPGA
                         -- renderer is still busy. Flushing the fifo + killing the drawer here
                         -- discards nearly every queued draw -> almost no VRAM writes -> noise.
-                        -- Namco System 10 (CXD8561CQ): the same. Gamshara / Kono e Tako send GP1(01) at
-                        -- every vblank of their 480i single-buffer screens; the destructive flush cut the
-                        -- frame's queued polygons -> flashing / missing title logo fill, text and the
-                        -- character-select panel, line flicker in play. MAME (all System 10 games correct)
-                        -- never discards queued work here, so neither does this core. (The retail-PSX
-                        -- flush - ridge racer's mid-rectangle cancel - is not a System 10 requirement.)
+                        -- Namco System 10 (CXD8561CQ): Gamshara / Kono e Tako send GP1(01) at every vblank of
+                        -- their 480i single-buffer screens; flushing a frame the FPGA GPU had not finished cut
+                        -- it (flashing title logo), not flushing let the next frame start over it (garbage,
+                        -- hangs). The write now waits for the GPU (memorymux), so the flush is harmless.
                         -- todo: must reset drawing units to idle? -> ridge racer triggers that in the middle of a rectangle command clearing the screen
                         -- reset CLUT cache?
                         
@@ -1778,7 +1802,7 @@ begin
       REPRODUCIBLEGPUTIMING=> REPRODUCIBLEGPUTIMING,      
       
       interlacedDrawing    => interlacedDrawing and not interlaced480pHack,  -- build #162: re-enable for 480i games (skip when 480p hack on)
-      activeLineLSB        => videoout_reports.activeLineLSB,    
+      activeLineLSB        => drawLineLSB,    
       
       proc_idle            => proc_idle,
       fifo_Valid           => fifoIn_Valid, 
@@ -1948,7 +1972,7 @@ begin
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing and not interlaced480pHack,  -- build #162: re-enable for 480i games (skip when 480p hack on)
-      activeLineLSB        => videoout_reports.activeLineLSB,    
+      activeLineLSB        => drawLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -2008,7 +2032,7 @@ begin
       flipX                => rect_flipX,
       flipY                => rect_flipY,
       interlacedDrawing    => interlacedDrawing and not interlaced480pHack,  -- build #162: re-enable for 480i games (skip when 480p hack on)
-      activeLineLSB        => videoout_reports.activeLineLSB,    
+      activeLineLSB        => drawLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -2074,7 +2098,7 @@ begin
       
       DrawPixelsMask       => GPUSTAT_DrawPixelsMask,
       interlacedDrawing    => interlacedDrawing and not interlaced480pHack,  -- build #162: re-enable for 480i games (skip when 480p hack on)
-      activeLineLSB        => videoout_reports.activeLineLSB,    
+      activeLineLSB        => drawLineLSB,    
       drawingOffsetX       => drawingOffsetX,   
       drawingOffsetY       => drawingOffsetY,   
       drawingAreaLeft      => drawingAreaLeft,  
@@ -2212,7 +2236,10 @@ begin
       requestVRAMEnable    => pipeline_reqVRAMEnable,
       requestVRAMXPos      => pipeline_reqVRAMXPos,  
       requestVRAMYPos      => pipeline_reqVRAMYPos,  
-      requestVRAMSize      => pipeline_reqVRAMSize,  
+      requestVRAMSize      => pipeline_reqVRAMSize,
+      requestVRAMRows      => pipeline_reqVRAMRows,
+      requestVRAMStep      => pipeline_reqVRAMStep,
+      interlacedDrawing    => interlacedDrawing and not interlaced480pHack,
       requestVRAMIdle      => reqVRAMIdle,
       requestVRAMDone      => reqVRAMDone,
       vram_DOUT            => vram_DOUT,      
@@ -3135,6 +3162,15 @@ begin
                         vram_RD       <= '1';
                         reqVRAMaddr   <= reqVRAMXPos(9 downto 2);
                         reqVRAMaddr2  <= reqVRAMXPos(9 downto 2);
+                        reqVRAMrowsIssue <= (others => '0');
+                        reqVRAMrowsData  <= (others => '0');
+                        if (pipeline_reqVRAMEnable = '1') then
+                           reqVRAMrowsIssue <= pipeline_reqVRAMRows;
+                           reqVRAMrowsData  <= pipeline_reqVRAMRows;
+                        end if;
+                        reqVRAMrowStep  <= unsigned(resize(pipeline_reqVRAMStep, 10));
+                        reqVRAMrowY     <= reqVRAMYPos;
+                        reqVRAMrowBeats <= reqVRAMSizeRounded(9 downto 2) - 1;
                         if (reqVRAMSizeRounded > 512) then
                            vram_BURSTCNT  <= x"80";
                            reqVRAMremain  <= x"80" - 1;
@@ -3197,10 +3233,20 @@ begin
                   end if;
                   
                when READVRAM =>
+                  -- System 10 texture rows: once the previous read is taken (vram_BUSY low), the next row goes out
+                  if (reqVRAMrowsIssue > 0 and vram_BUSY = '0') then
+                     vram_RD                 <= '1';
+                     vram_ADDR(20 downto 11) <= std_logic_vector(reqVRAMrowY + reqVRAMrowStep);
+                     reqVRAMrowY             <= reqVRAMrowY + reqVRAMrowStep;
+                     reqVRAMrowsIssue        <= reqVRAMrowsIssue - 1;
+                  end if;
                   if (vram_DOUT_READY = '1') then
                      reqVRAMaddr <= reqVRAMaddr + 1;
                      if (reqVRAMremain > 0) then
                         reqVRAMremain <= reqVRAMremain - 1;
+                     elsif (reqVRAMrowsData > 0) then     -- beats of the next texture row
+                        reqVRAMremain   <= reqVRAMrowBeats;
+                        reqVRAMrowsData <= reqVRAMrowsData - 1;
                      else
                         if (reqVRAMtwice = '1') then
                            vramState               <= READSECOND;

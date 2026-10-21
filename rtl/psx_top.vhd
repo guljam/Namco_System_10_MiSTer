@@ -300,6 +300,7 @@ entity psx_top is
       s12_rdma_src    : out std_logic_vector(26 downto 0) := (others => '0');
       s12_rdma_valid  : in  std_logic := '0';
       s12_rdma_pop    : out std_logic := '0';
+      s12_rdma_want   : out std_logic := '0';
       s12_rdma_data   : in  std_logic_vector(31 downto 0) := (others => '0');
       -- C76 liveness diag from top level (ZN1.sv): bit0=c76_c352_seen (C76 wrote C352
       -- during BIOS init = alive), bit1=c76_halted (C76 hit an unimplemented opcode = crashed)
@@ -575,6 +576,7 @@ architecture arch of psx_top is
    signal irq_PAD                : std_logic;
    signal irq_SIO                : std_logic;
    signal irq_SPU                : std_logic;
+   signal gpu_frame_busy         : std_logic;   -- System 10: memorymux holds GP1(01) while the GPU is busy
    signal irq_LIGHTPEN           : std_logic;
    
    -- dma
@@ -1911,6 +1913,7 @@ begin
       DMA_ROM_start        => s12_rdma_start,
       DMA_ROM_valid        => s12_rdma_valid,
       DMA_ROM_readEna      => s12_rdma_pop,
+      DMA_ROM_want         => s12_rdma_want,
       DMA_ROM_read         => s12_rdma_data,
       
       spu_timing_on        => dma_spu_timing_on,   
@@ -2127,6 +2130,7 @@ begin
       system_paused        => pausing,
       
       ditherOff            => ditherOff,
+      frame_busy           => gpu_frame_busy,
       gpuType1             => s11_gputype1,  -- 2026-07-13: per-GAME, not per-platform. MAME namcos11.cpp:
                                      -- only Tekken 1 is a coh100 board (CXD8538Q = gputype1); every other
                                      -- System 11 game incl. Tekken 2 is coh110 (CXD8561Q = gputype2, the
@@ -3953,6 +3957,7 @@ begin
       bus_gpu_write        => bus_gpu_write,    
       bus_gpu_dataRead     => bus_gpu_dataRead,
       bus_gpu_stall        => bus_gpu_stall,
+      gpu_frame_busy       => gpu_frame_busy,
       
       bus_mdec_addr        => bus_mdec_addr,
       bus_mdec_dataWrite   => bus_mdec_dataWrite,

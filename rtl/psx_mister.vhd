@@ -342,6 +342,7 @@ entity psx_mister is
       s12_rdma_src    : out std_logic_vector(26 downto 0) := (others => '0');
       s12_rdma_valid  : in  std_logic := '0';
       s12_rdma_pop    : out std_logic := '0';
+      s12_rdma_want   : out std_logic := '0';
       s12_rdma_data   : in  std_logic_vector(31 downto 0) := (others => '0');
       dbg_c76_in      : in  std_logic_vector(1 downto 0) := "00";  -- {c76_resp, c76_pc_ever_c098}
       dbg_c76_pc      : in  std_logic_vector(23 downto 0) := (others => '0');  -- C76 first PC
@@ -807,6 +808,7 @@ begin
       s12_rdma_src    => s12_rdma_src,
       s12_rdma_valid  => s12_rdma_valid,
       s12_rdma_pop    => s12_rdma_pop,
+      s12_rdma_want   => s12_rdma_want,
       s12_rdma_data   => s12_rdma_data,
       dbg_c76_in      => dbg_c76_in,
       dbg_c76_pc      => dbg_c76_pc,

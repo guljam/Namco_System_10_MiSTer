@@ -379,6 +379,7 @@ parameter CONF_STR = {
 	"O[13:12],Orientation,Horizontal,Vertical CW,Vertical CCW,Flipped;",
 	"-;",
 	"H3SC0,BINISO,Mount CD;",
+	"H4SC0,P3A,Mount audio;",
 	"H3-;",
 	"P1,Video & Audio;",
 	"P1-;",
@@ -411,19 +412,26 @@ wire [127:0] status;
 // Bit 0 hides the Light Gun OSD page (H0 prefix) for every game whose MRA does
 // not declare itself a gun game — light-gun support must not be offered to
 // games that don't natively have it.
-wire        b_light_gun, b_cdrom, b_exio_mcu;
-// H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only; H3: Mount CD, CD games only
-wire [15:0] status_menumask = {12'd0, ~b_cdrom, ~b_light_gun, ~status[96], 1'b0};
+wire        b_light_gun, b_cdrom, b_exio_mcu, b_exio_analog, b_memp3;
+wire  [3:0] b_in1_layout;
+// H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only; H3: Mount CD, CD games only;
+// H4: Mount audio, MEM(P3) games only
+wire [15:0] status_menumask = {11'd0, ~b_memp3, ~b_cdrom, ~b_light_gun, ~status[96], 1'b0};
 wire        forced_scandoubler;
-wire [31:0] sd_lba0;                   // slot 0: CD-ROM image (s10_atapi)
+wire [31:0] sd_lba0;                   // slot 0: CD-ROM image (s10_atapi) or MEM(P3) audio (s10_p3audio)
+wire [31:0] cd_lba, p3_lba;
+wire  [5:0] p3_blk_cnt;
+wire        p3_sd_rd;
 wire [31:0] sd_lba1 = 0;
 wire [ 6:0] sd_lba2 = 0;
 wire [ 6:0] sd_lba3 = 0;
 wire        cd_sd_rd;
-wire  [3:0] sd_rd = {3'b000, cd_sd_rd};
+wire  [3:0] sd_rd = {3'b000, b_memp3 ? p3_sd_rd : cd_sd_rd};
+assign      sd_lba0 = b_memp3 ? p3_lba : cd_lba;
 wire  [3:0] sd_wr = 4'b0000;
 wire  [3:0] sd_ack;
-wire  [8:0] sd_buff_addr;
+wire [12:0] sd_buff_addr;                // 16-bit words; multi-block requests count on across blocks
+wire  [5:0] cd_blk_cnt;
 wire [15:0] sd_buff_dout;
 wire [15:0] sd_buff_din2;
 wire [15:0] sd_buff_din3;
@@ -523,7 +531,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(4), .BLKSZ(3)) hps_io
 	.ioctl_din(ioctl_din),
 
 	.sd_lba('{sd_lba0, sd_lba1, sd_lba2, sd_lba3}),
-	.sd_blk_cnt('{0,0, 0, 0}),
+	.sd_blk_cnt('{b_memp3 ? p3_blk_cnt : cd_blk_cnt, 0, 0, 0}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
@@ -579,7 +587,8 @@ hps_ext hps_ext
 //   0x0000000-0x03FFFFF  main RAM        4 MB
 //   0x0400000-0x07FFFFF  BIOS            4 MB   descrambled from the MEM board at load (MRA index 0)
 //   0x0800000-0x08FFFFF  MEM(N) SRAM     1 MB   bad-block table (0x1F500000)
-// DDR3: MEM board image at 0x32000000 (MRA indexes 2/3, fast loading), see rtl/s10_loader.sv.
+// DDR3 (from 0x30000000: VRAM, SPU RAM, GPU buffers up to 0x307FFFFF): MEM board image at 0x30800000 (MRA indexes
+// 2/3, fast loading, up to 232 MB), MEM(P3) MCU RAM at 0x3F000000 (8 MB), PB3 nonlinear table at 0x3F800000.
 localparam BIOS_START = 27'h0400000;
 
 wire        exe_download  = 1'b0;
@@ -607,12 +616,14 @@ wire  [15:0] b_data_xor;
 wire  [63:0] b_perm;
 wire   [7:0] b_exio_ident;
 wire  [27:0] b_save_base;
-wire [1023:0] b_t2_emask, b_t2_dmask, b_t2_iv;
-wire  [15:0] b_t2_xmask, b_t2_nl_out;
-wire  [63:0] b_t2_nl_ac, b_t2_nl_ap, b_t2_nl_bc, b_t2_nl_bp;
+wire         b_t2_row_we;
+wire   [5:0] b_t2_row_addr;
+wire   [2:0] b_t2_row_lane, b_t2_nterms;
+wire  [15:0] b_t2_row_data, b_t2_xmask, b_t2_nl_out;
 wire         b_nl_table;
 wire  [20:0] b_nl_bits;
-localparam [27:0] NL_OFF = 28'h6400000;     // nonlinear decrypter table in the DDR3 image (MRA index 4)
+localparam [27:0] IMG_BASE = 28'h0800000;   // MEM board image: DDR3 0x30800000
+localparam [27:0] NL_OFF = 28'hF000000;     // nonlinear decrypter table, from IMG_BASE: DDR3 0x3F800000 (MRA index 4)
 
 wire        ld_dl_req;
 wire [26:0] ld_dl_addr;
@@ -628,7 +639,7 @@ wire [27:0] ld_ddr_addr;
 wire [63:0] ld_ddr_din;
 wire  [7:0] ld_ddr_be;
 
-s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000), .NL_OFF(NL_OFF)) s10_loader
+s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(IMG_BASE), .NL_OFF(NL_OFF)) s10_loader
 (
 	.clk           (clk_1x),
 	.clk2          (clk_2x),
@@ -646,19 +657,20 @@ s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(28'h2000000), .NL_OFF(NL_OFF)) s
 	.perm          (b_perm),
 	.exio_ident    (b_exio_ident),
 	.save_base     (b_save_base),
-	.t2_emask      (b_t2_emask),
-	.t2_dmask      (b_t2_dmask),
+	.t2_row_we     (b_t2_row_we),
+	.t2_row_addr   (b_t2_row_addr),
+	.t2_row_lane   (b_t2_row_lane),
+	.t2_row_data   (b_t2_row_data),
 	.t2_xmask      (b_t2_xmask),
-	.t2_iv         (b_t2_iv),
-	.t2_nl_ac      (b_t2_nl_ac),
-	.t2_nl_ap      (b_t2_nl_ap),
-	.t2_nl_bc      (b_t2_nl_bc),
-	.t2_nl_bp      (b_t2_nl_bp),
 	.t2_nl_out     (b_t2_nl_out),
+	.t2_nterms     (b_t2_nterms),
 	.nl_table      (b_nl_table),
 	.light_gun     (b_light_gun),
 	.cdrom         (b_cdrom),
 	.exio_mcu      (b_exio_mcu),
+	.exio_analog   (b_exio_analog),
+	.memp3         (b_memp3),
+	.in1_layout    (b_in1_layout),
 	.nl_bits       (b_nl_bits),
 	.record_ok     (b_record_ok),
 	.dl_req        (ld_dl_req),
@@ -700,7 +712,15 @@ always @(posedge clk_1x) begin
 	if (clr_run && !clr_start && !fill_busy) begin clr_run <= 0; ram_cleared <= 1; end
 end
 
-wire reset_or = RESET | buttons[1] | status[0] | rom_download | ~ram_cleared | clr_start | clr_run;
+// Mounting a CD image restarts the game: the Taiko games look for the drive only at boot (without a disc they
+// stop on a black screen after the NOTICE screen), so a disc chosen from the OSD takes effect right away.
+reg [15:0] mount_rst = 0;
+always @(posedge clk_1x) begin
+	if (mount_rst != 0) mount_rst <= mount_rst - 1'd1;
+	if (img_mounted[0] && img_size != 0 && b_cdrom) mount_rst <= 16'hFFFF;
+end
+
+wire reset_or = RESET | buttons[1] | status[0] | rom_download | ~ram_cleared | clr_start | clr_run | (mount_rst != 0);
 
 ///////////////////////////  SAVESTATE  /////////////////////////////////
 
@@ -901,11 +921,14 @@ always @(posedge clk_1x) begin
       aliveCnt <= 0;
    end
 
-   // System 10's CXD8606 runs at the PlayStation's 33.8688 MHz (101.4912 MHz / 3): exact PS1 timing.
-   TURBO_MEM      <= 1'b0;
-   TURBO_COMP     <= 1'b0;
-   TURBO_CACHE    <= 1'b0;
-   TURBO_CACHE50  <= 1'b0;
+   // System 10's CXD8606 runs from 101.4912 MHz / 2 = 50.7456 MHz (MAME CXD8606BQ at 101.4912 MHz, internal
+   // /2), 1.5x the PlayStation. The core clocks the CPU at 33.8688 MHz and makes up the speed with the
+   // System 12 turbo/cache modes (as the Tenkomori Shooting core, 50 MHz CXD8661R): faster memory access,
+   // no compute stalls, data cache (half rate).
+   TURBO_MEM      <= 1'b1;
+   TURBO_COMP     <= 1'b1;
+   TURBO_CACHE    <= 1'b1;
+   TURBO_CACHE50  <= 1'b1;
 
 end
 
@@ -913,8 +936,11 @@ end
 
 // ===== Namco System 10: main-board I/O CPLD + MEM ROM board =====
 wire signed [15:0] psx_aud_l, psx_aud_r;
-assign AUDIO_L = psx_aud_l;
-assign AUDIO_R = psx_aud_r;
+wire signed [15:0] p3_aud_l, p3_aud_r;                // MEM(P3) MP3 board audio (pre-converted, s10_p3audio)
+wire signed [16:0] mix_l = psx_aud_l + p3_aud_l;
+wire signed [16:0] mix_r = psx_aud_r + p3_aud_r;
+assign AUDIO_L = (mix_l[16] == mix_l[15]) ? mix_l[15:0] : {mix_l[16], {15{~mix_l[16]}}};
+assign AUDIO_R = (mix_r[16] == mix_r[15]) ? mix_r[15:0] : {mix_r[16], {15{~mix_r[16]}}};
 
 // board bus from the PSX core (EXP1/EXP3)
 wire [23:0] s10_addr;
@@ -933,6 +959,7 @@ wire        s12_rdma_start;
 wire [26:0] s12_rdma_src;
 wire        s12_rdma_valid;
 wire        s12_rdma_pop;
+wire        s12_rdma_want;
 wire [31:0] s12_rdma_data;
 // MEM(N) SRAM on SDRAM channel 3
 wire        s10_sram_req, s10_sram_rnw, s10_sram_ready;
@@ -950,18 +977,40 @@ always @(posedge clk_1x) begin                       // MAME: TEST is a slide sw
 	if ((joy[12] & ~test_p1) | (joy2[12] & ~test_p2)) test_sw <= ~test_sw;
 	if (reset_or) test_sw <= 1'b0;
 end
-wire [7:0]  in_p1 = {joy[10],  joy[6],  joy[5],  joy[4],  joy[3],  joy[2],  joy[1],  joy[0]};
-wire [7:0]  in_p2 = {joy2[10], joy2[6], joy2[5], joy2[4], joy2[3], joy2[2], joy2[1], joy2[0]};
-wire [31:0] s10_in1 = ~{joy[13] | joy2[13],            // b31 SERVICE1
+// GAHAHA (record: EXIO analog) has its own IN1 layout (MAME 'gahaha' port): b0 Button 2, b1 Button 1,
+// b2 Select Down, b3 Select Up, b4 Enter (= Button 3 here), b7 / b15 Start; the sticks go to the EXIO ADC.
+// MEM(P3) games' IN1 layouts (MAME g13jnr / nicetsuk / squizchs ports), active high here, inverted below:
+//   1 Golgo 13: standard + b27 scope sensor (active high on the board, toggled by Button 3 as MAME's PORT_TOGGLE)
+//   2 Nice Tsukkomi: b0/b3 Up, b1/b2 Down (play / operator menu), b4 Enter (Button 5), b5 Pedal (Button 4),
+//     b7 Choose (Start), b17 Forehead (Button 1), b12 Chest (Button 2), b18 Back of head (Button 3)
+//   3 Seishun Quiz: b3-b0 answer buttons 1-4 (P1), b11-b8 (P2), b7 / b15 Start
+reg  scope = 0, scope_btn = 0;
+always @(posedge clk_1x) begin
+	scope_btn <= joy[6];
+	if (joy[6] & ~scope_btn) scope <= ~scope;
+	if (reset_or) scope <= 1'b0;
+end
+wire [31:0] in1_nicetsuk = {joy[13] | joy2[13], test_sw, joy[11], joy2[11], 4'b0000, 5'd0, joy[6], joy[4], 1'b0,
+                            3'b000, joy[5], 4'b0000, joy[10], 1'b0, joy[7], joy[8], joy[3], joy[2], joy[2], joy[3]};
+wire [31:0] in1_squizchs = {joy[13] | joy2[13], test_sw, joy[11], joy2[11], 12'd0,
+                            joy2[10], 3'b000, joy2[4], joy2[5], joy2[6], joy2[7],
+                            joy[10],  3'b000, joy[4],  joy[5],  joy[6],  joy[7]};
+wire [7:0]  in_p1 = b_exio_analog ?{joy[10], 2'b00, joy[6] | joy2[6], joy[3] | joy2[3], joy[2] | joy2[2], joy[4], joy[5]}
+                                  : {joy[10],  joy[6],  joy[5],  joy[4],  joy[3],  joy[2],  joy[1],  joy[0]};
+wire [7:0]  in_p2 = b_exio_analog ? {joy2[10], 5'b00000, joy2[4], joy2[5]}
+                                  : {joy2[10], joy2[6], joy2[5], joy2[4], joy2[3], joy2[2], joy2[1], joy2[0]};
+wire [31:0] in1_std  = {joy[13] | joy2[13],            // b31 SERVICE1
                         test_sw,                       // b30 TEST (slide)
                         joy[11],                       // b29 COIN1
                         joy2[11],                      // b28 COIN2
-                        4'b0000,                       // b27-24 unused
+                        (b_in1_layout == 4'd1) ? ~scope : 1'b0, // b27 Golgo 13 scope sensor (active high)
+                        3'b000,                        // b26-24 unused
                         joy2[9], joy2[8], joy2[7],     // b23-21 P2 buttons 6-4
                         1'b0,                          // b20 unused
                         joy[9], joy[8], joy[7],        // b19-17 P1 buttons 6-4
                         1'b0,                          // b16 unused
                         in_p2, in_p1};
+wire [31:0] s10_in1  = ~((b_in1_layout == 4'd2) ? in1_nicetsuk : (b_in1_layout == 4'd3) ? in1_squizchs : in1_std);
 // DSW1 from the MRA <switches> (ioctl index 254): the byte is MAME's SYSTEM port bits 7-0 (active low,
 // SW1:1 = bit 7 ... SW1:8 = bit 0); all off (0xFF) when the MRA has no switches
 reg  [7:0] dsw_mra = 8'hFF;
@@ -1004,15 +1053,27 @@ s10_atapi s10_atapi
 	.rdma_valid   (cd_rdma_valid),
 	.rdma_pop     (s12_rdma_pop & cd_dma_now),
 	.rdma_data    (cd_rdma_data),
-	.sd_lba       (sd_lba0),
+	.sd_lba       (cd_lba),
+	.sd_blk_cnt   (cd_blk_cnt),
 	.sd_rd        (cd_sd_rd),
-	.sd_ack       (sd_ack[0]),
+	.sd_ack       (sd_ack[0] & ~b_memp3),
 	.sd_buff_addr (sd_buff_addr),
 	.sd_buff_dout (sd_buff_dout),
-	.sd_buff_wr   (sd_buff_wr),
-	.img_mounted  (img_mounted[0]),
+	.sd_buff_wr   (sd_buff_wr & ~b_memp3),
+	.img_mounted  (img_mounted[0] & ~b_memp3),
 	.img_size     (img_size)
 );
+
+// MiSTer analog axis (signed, -128..127, right/down positive) -> 10-bit ADC value 0..1023 (MAME EXIO_ANALOG
+// PORT_MINMAX(0, 0x3ff); PORT_REVERSE where MAME has it)
+function automatic [9:0] ax10(input [7:0] a, input rev);
+	reg [7:0] u;
+	begin
+		u = a ^ 8'h80;                       // offset binary: 0 = full left/up, 255 = full right/down
+		if (rev) u = ~u;
+		ax10 = {u, u[7:6]};
+	end
+endfunction
 
 // EXIO board with microcontroller (Taiko no Tatsujin drums), high-level. Drum zones from Buttons 2-5:
 // Left Don = left surface, Right Don = right surface, Left Ka = left rim, Right Ka = right rim.
@@ -1029,7 +1090,12 @@ s10_exio s10_exio
 	.rd     (s10_rd),
 	.wr     (s10_wr),
 	.rdata  (s10_exio_rdata),
-	.drum   ({joy2[7], joy2[5], joy2[6], joy2[8], joy[7], joy[5], joy[6], joy[8]})
+	.drum   ({joy2[7], joy2[5], joy2[6], joy2[8], joy[7], joy[5], joy[6], joy[8]}),
+	.analog_en (b_exio_analog),
+	.analog ({ax10(joystick_analog_r1[15:8], 0), ax10(joystick_analog_r1[7:0], 1),     // P2 right Y, X (X reversed)
+	          ax10(joystick_analog_l1[15:8], 1), ax10(joystick_analog_l1[7:0], 0),     // P2 left Y (reversed), X
+	          ax10(joystick_analog_r0[15:8], 0), ax10(joystick_analog_r0[7:0], 1),     // P1 right
+	          ax10(joystick_analog_l0[15:8], 1), ax10(joystick_analog_l0[7:0], 0)})    // P1 left
 );
 
 // EXIO(G) light guns (Point Blank 3): aim from the MiSTer gun / analog stick or the mouse, trigger = button 1
@@ -1074,6 +1140,115 @@ s10_io s10_io
 	.irq10      (s10_irq10)
 );
 
+// MEM(P3) board: MCU RAM window + high-level MCU / MP3 decoder (Golgo 13, Nice Tsukkomi, Seishun Quiz)
+wire        p3_play, p3_stop, p3_stall;
+wire [23:0] p3_len;
+wire [31:0] p3_c0, p3_c1, p3_c2, s10_p3_rdata;
+wire  [6:0] p3_vol;
+wire        p3_ddr_request, p3_ddr_ack, p3_ddr_we, p3_ddr_rd, p3_ddr_dout_ready;
+wire  [7:0] p3_ddr_burstcnt, p3_ddr_be;
+wire [27:0] p3_ddr_addr;
+wire [63:0] p3_ddr_din;
+wire        m_ddr_request, m_ddr_ack, m_ddr_we, m_ddr_rd, m_ddr_dout_ready;
+wire  [7:0] m_ddr_burstcnt, m_ddr_be;
+wire [27:0] m_ddr_addr;
+wire [63:0] m_ddr_din;
+wire        p3_win = b_memp3 && (s10_addr[23:18] == 6'b001100);   // 0x1F300000-0x1F33FFFF
+
+s10_p3 s10_p3
+(
+	.clk            (clk_1x),
+	.clk2           (clk_2x),
+	.reset          (reset),
+	.enable         (b_memp3),
+	.mcu_base       (28'hF000000),                         // DDR3 0x3F000000
+	.addr           (s10_addr),
+	.wdata          (s10_wdata),
+	.wmask          (s10_wmask),
+	.size           (s10_size),
+	.rd             (s10_rd),
+	.wr             (s10_wr),
+	.rdata          (s10_p3_rdata),
+	.stall          (p3_stall),
+	.aim_x          ({gun_p1x, gun_p1x[7:6]}),                // Golgo 13 rifle: P1 gun / stick / mouse
+	.aim_y          ({gun_p1y, gun_p1y[7:6]}),
+	.play_req       (p3_play),
+	.play_len       (p3_len),
+	.play_c0        (p3_c0),
+	.play_c1        (p3_c1),
+	.play_c2        (p3_c2),
+	.stop_req       (p3_stop),
+	.volume         (p3_vol),
+	.ddr_request    (p3_ddr_request),
+	.ddr_ack        (p3_ddr_ack),
+	.ddr_burstcnt   (p3_ddr_burstcnt),
+	.ddr_addr       (p3_ddr_addr),
+	.ddr_din        (p3_ddr_din),
+	.ddr_be         (p3_ddr_be),
+	.ddr_we         (p3_ddr_we),
+	.ddr_rd         (p3_ddr_rd),
+	.ddr_dout       (psx_ddram_dout),
+	.ddr_dout_ready (p3_ddr_dout_ready)
+);
+
+s10_p3audio s10_p3audio
+(
+	.clk          (clk_1x),
+	.reset        (reset),
+	.enable       (b_memp3),
+	.play_req     (p3_play),
+	.play_len     (p3_len),
+	.play_c0      (p3_c0),
+	.play_c1      (p3_c1),
+	.play_c2      (p3_c2),
+	.stop_req     (p3_stop),
+	.volume       (p3_vol),
+	.audio_l      (p3_aud_l),
+	.audio_r      (p3_aud_r),
+	.sd_lba       (p3_lba),
+	.sd_blk_cnt   (p3_blk_cnt),
+	.sd_rd        (p3_sd_rd),
+	.sd_ack       (sd_ack[0] & b_memp3),
+	.sd_buff_addr (sd_buff_addr),
+	.sd_buff_dout (sd_buff_dout),
+	.sd_buff_wr   (sd_buff_wr & b_memp3),
+	.img_mounted  (img_mounted[0] & b_memp3),
+	.img_size     (img_size)
+);
+
+s10_ddr_mux s10_ddr_mux
+(
+	.clk2           (clk_2x),
+	.reset          (reset),
+	.a_request      (m_ddr_request),
+	.a_ack          (m_ddr_ack),
+	.a_burstcnt     (m_ddr_burstcnt),
+	.a_addr         (m_ddr_addr),
+	.a_din          (m_ddr_din),
+	.a_be           (m_ddr_be),
+	.a_we           (m_ddr_we),
+	.a_rd           (m_ddr_rd),
+	.a_dout_ready   (m_ddr_dout_ready),
+	.b_request      (p3_ddr_request),
+	.b_ack          (p3_ddr_ack),
+	.b_burstcnt     (p3_ddr_burstcnt),
+	.b_addr         (p3_ddr_addr),
+	.b_din          (p3_ddr_din),
+	.b_be           (p3_ddr_be),
+	.b_we           (p3_ddr_we),
+	.b_rd           (p3_ddr_rd),
+	.b_dout_ready   (p3_ddr_dout_ready),
+	.ddr_request    (s10_ddr_request),
+	.ddr_ack        (s10_ddr_ack),
+	.ddr_burstcnt   (s10_ddr_burstcnt),
+	.ddr_addr       (s10_ddr_addr),
+	.ddr_din        (s10_ddr_din),
+	.ddr_be         (s10_ddr_be),
+	.ddr_we         (s10_ddr_we),
+	.ddr_rd         (s10_ddr_rd),
+	.ddr_dout_ready (psx_ddram_dout_ready)
+);
+
 s10_mem s10_mem
 (
 	.clk            (clk_1x),
@@ -1085,17 +1260,15 @@ s10_mem s10_mem
 	.nand_big       (b_nand_big),
 	.data_xor       (b_data_xor),
 	.perm           (b_perm),
-	.img_base       (28'h2000000),
+	.img_base       (IMG_BASE),
 	.save_base      (b_save_base),
-	.t2_emask       (b_t2_emask),
-	.t2_dmask       (b_t2_dmask),
+	.t2_row_we      (b_t2_row_we),
+	.t2_row_addr    (b_t2_row_addr),
+	.t2_row_lane    (b_t2_row_lane),
+	.t2_row_data    (b_t2_row_data),
 	.t2_xmask       (b_t2_xmask),
-	.t2_iv          (b_t2_iv),
-	.t2_nl_ac       (b_t2_nl_ac),
-	.t2_nl_ap       (b_t2_nl_ap),
-	.t2_nl_bc       (b_t2_nl_bc),
-	.t2_nl_bp       (b_t2_nl_bp),
 	.t2_nl_out      (b_t2_nl_out),
+	.t2_nterms      (b_t2_nterms),
 	.t2_nl_table    (b_nl_table),
 	.t2_nl_bits     (b_nl_bits),
 	.nl_off         (NL_OFF),
@@ -1104,12 +1277,13 @@ s10_mem s10_mem
 	.wmask          (s10_wmask),
 	.size           (s10_size),
 	.rd             (s10_rd),
-	.wr             (s10_wr),
+	.wr             (s10_wr & ~p3_win),
 	.rdata          (s10_mem_rdata),
 	.stall          (s10_stall),
 	.rdma_start     (s12_rdma_start & ~cd_dma_pending),
 	.rdma_valid     (mem_rdma_valid),
 	.rdma_pop       (s12_rdma_pop & ~cd_dma_now),
+	.rdma_want      (s12_rdma_want & ~cd_dma_now),
 	.rdma_data      (mem_rdma_data),
 	.sram_req       (s10_sram_req),
 	.sram_addr      (s10_sram_addr),
@@ -1124,16 +1298,16 @@ s10_mem s10_mem
 	.up_din         (ioctl_din),
 	.up_wait        (s10_up_wait),
 	.save_req       (ioctl_upload_req),
-	.ddr_request    (s10_ddr_request),
-	.ddr_ack        (s10_ddr_ack),
-	.ddr_burstcnt   (s10_ddr_burstcnt),
-	.ddr_addr       (s10_ddr_addr),
-	.ddr_din        (s10_ddr_din),
-	.ddr_be         (s10_ddr_be),
-	.ddr_we         (s10_ddr_we),
-	.ddr_rd         (s10_ddr_rd),
+	.ddr_request    (m_ddr_request),
+	.ddr_ack        (m_ddr_ack),
+	.ddr_burstcnt   (m_ddr_burstcnt),
+	.ddr_addr       (m_ddr_addr),
+	.ddr_din        (m_ddr_din),
+	.ddr_be         (m_ddr_be),
+	.ddr_we         (m_ddr_we),
+	.ddr_rd         (m_ddr_rd),
 	.ddr_dout       (psx_ddram_dout),
-	.ddr_dout_ready (psx_ddram_dout_ready)
+	.ddr_dout_ready (m_ddr_dout_ready)
 );
 
 wire [31:0] jtag_addr = 32'd0;
@@ -1447,11 +1621,11 @@ psx
    .s10_size       (s10_size),
    .s10_rd         (s10_rd),
    .s10_wr         (s10_wr),
-   .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata),
-   .s10_stall      (s10_stall),
+   .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata | s10_p3_rdata),
+   .s10_stall      (s10_stall | p3_stall),
    .s10_irq10      (s10_irq10),
    .s10_exio       (b_exio_ident != 8'hFF),
-   .s10_gun_cross  ({2{b_light_gun & status[121]}}),
+   .s10_gun_cross  ({b_light_gun & status[121] & ~b_memp3, b_light_gun & status[121]}),   // Golgo 13: P1 only
    .s10_gun1_x     (gun_p1x),
    .s10_gun1_y     (gun_p1y),
    .s10_gun2_x     (gun_p2x),
@@ -1468,6 +1642,7 @@ psx
    .s12_rdma_src   (s12_rdma_src),
    .s12_rdma_valid (s12_rdma_valid),
    .s12_rdma_pop   (s12_rdma_pop),
+   .s12_rdma_want  (s12_rdma_want),
    .s12_rdma_data  (s12_rdma_data),
    .dbg_c76_in     (2'b00),
    .dbg_c76_pc     (24'd0),

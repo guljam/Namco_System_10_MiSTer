@@ -31,12 +31,14 @@ module s10_mem (
     input  wire  [63:0]  perm,               // descramble: perm[4*i+3:4*i] = source bit of output bit i
     input  wire  [27:0]  img_base,           // DDR3 byte offset (from 0x30000000) of the image
     input  wire  [27:0]  save_base,          // image byte offset of the nvram window
-    input  wire [1023:0] t2_emask,
-    input  wire [1023:0] t2_dmask,
+    // type-2 decrypter: mask RAM rows from the loader (s10_crypt_t2s), xmask / output mask / term count
+    input  wire          t2_row_we,
+    input  wire   [5:0]  t2_row_addr,
+    input  wire   [2:0]  t2_row_lane,
+    input  wire  [15:0]  t2_row_data,
     input  wire  [15:0]  t2_xmask,
-    input  wire [1023:0] t2_iv,
-    input  wire  [63:0]  t2_nl_ac, t2_nl_ap, t2_nl_bc, t2_nl_bp,
     input  wire  [15:0]  t2_nl_out,
+    input  wire   [2:0]  t2_nterms,
     input  wire          t2_nl_table,        // nonlinear term from the bit table (MAME ..._nonlinear_device)
     input  wire  [20:0]  t2_nl_bits,         // table length in bits
     input  wire  [27:0]  nl_off,             // image byte offset of the table
@@ -55,6 +57,9 @@ module s10_mem (
     input  wire          rdma_start,
     output wire          rdma_valid,
     input  wire          rdma_pop,
+    input  wire          rdma_want,         // the channel-5 DMA still needs words (fetch only then: MAME pio_dma_read
+                                            // reads exactly the transfer's words; reading ahead lost 4 NAND bytes
+                                            // after every transfer - Panikuru's streamed music)
     output wire  [31:0]  rdma_data,
 
     // ---- SDRAM channel 3 client: MEM(N) SRAM at 0x1F500000 (bad-block table, 1 MB window as MAME)
@@ -117,14 +122,15 @@ module s10_mem (
         .word_valid(cr_step && crypt_type == 2'd1), .cipher(cr_cipher),
         .plain(t1_plain), .active(t1_active)
     );
-    s10_crypt_t2 crypt_t2 (
+    wire        t2_busy;
+    s10_crypt_t2s crypt_t2 (
         .clk(clk), .reset(reset || crypt_type != 2'd2),
+        .row_we(t2_row_we), .row_addr(t2_row_addr), .row_lane(t2_row_lane), .row_data(t2_row_data),
+        .xmask(t2_xmask), .nl_out(t2_nl_out), .nterms(t2_nterms),
+        .nl_tab_en(t2_nl_table), .nl_tab_bit(nl_bit),
         .activate(cr_act_p), .iv(cr_iv), .deactivate(cr_deact_p),
         .word_valid(cr_step && crypt_type == 2'd2), .cipher(cr_cipher),
-        .emask(t2_emask), .dmask(t2_dmask), .xmask(t2_xmask), .ivtab(t2_iv),
-        .nl_ac(t2_nl_ac), .nl_ap(t2_nl_ap), .nl_bc(t2_nl_bc), .nl_bp(t2_nl_bp), .nl_out(t2_nl_out),
-        .nl_tab_en(t2_nl_table), .nl_tab_bit(nl_bit),
-        .plain(t2_plain), .active(t2_active)
+        .plain(t2_plain), .active(t2_active), .busy(t2_busy)
     );
     wire        cr_active = (crypt_type == 2'd1) ? t1_active : (crypt_type == 2'd2) ? t2_active : 1'b0;
     wire [15:0] cr_plain  = (crypt_type == 2'd1) ? t1_plain  : t2_plain;
@@ -437,7 +443,7 @@ module s10_mem (
             rd_a    <= addr;
             rd_size <= size;
         end
-        if (rdma_start) dma_on <= board_memn;
+        if (rdma_start) begin dma_on <= board_memn; dq_full <= 1'b0; end
         if (rdma_pop && dq_full) dq_full <= 1'b0;
 
         // ---- timers
@@ -482,7 +488,7 @@ module s10_mem (
                         t_a     <= rd_a;
                         t_sz    <= rd_size;
                         st      <= (board_memn && rd_a[23:20] == 4'h5) ? S_SRAM : S_RHALF;
-                    end else if (dma_on && !dq_full) begin
+                    end else if (dma_on && rdma_want && !dq_full) begin
                         t_write <= 1'b0; t_dma <= 1'b1;
                         t_a     <= 24'h450000;
                         t_sz    <= 2'b10;          // two data-register reads
@@ -552,6 +558,7 @@ module s10_mem (
                 end
                 S_NBDONE: begin
                     if (!nb_second) begin nb_second <= 1'b1; st <= S_NB; end
+                    else if (crypt_type == 2'd2 && t2_busy) st <= S_NBDONE;      // previous step / activate still running
                     else if (cr_active && t2_nl_table && !nl_hit) begin
                         nl_tag <= nl_cnt[20:6];                                       // fetch the table beat
                         start_job(J_NL, nl_off + {4'd0, nl_cnt[20:6], 3'd0}, 14'd1, S_NBDONE);
@@ -656,8 +663,9 @@ module s10_mem (
                     st <= S_WNEXT;
                     if (t_hsel) begin
                         if (t_ha == 24'h300000 || (board_memn && t_ha == 24'h380000)) begin
-                            // crypto switch: bit 15 = activate with IV = bits 3-0
-                            if (t_d16[15]) begin cr_act_p <= 1'b1; cr_iv <= t_d16[3:0]; end
+                            // crypto switch: bit 15 = activate with IV = bits 3-0 (after a running step)
+                            if (crypt_type == 2'd2 && (t2_busy || cr_step)) st <= S_WHALF;
+                            else if (t_d16[15]) begin cr_act_p <= 1'b1; cr_iv <= t_d16[3:0]; end
                             else cr_deact_p <= 1'b1;
                         end else if (!board_memn) begin
                             if (t_ha[23:17] == 7'b1011_010) begin                       // bank_w

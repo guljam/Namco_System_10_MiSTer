@@ -15,7 +15,7 @@ if [ "${REUSE:-0}" != "1" ]; then
   rm -rf gtb
   python "$HERE/gen_tb_gpu.py"
   "$NVC" $NVCF --work="gtb:$WDW/gtb" -L "$SYSBW" -a --relaxed "$HERE/tb_gpu.vhd"
-  "$NVC" $NVCF -M 2g -H 2g --work="gtb:$WDW/gtb" -L "$SYSBW" -e tb_gpu -gSLOWVRAM="${2:-0}" -gLOADV="'${LOADV:-0}'" -gLOGV="'${LOGV:-0}'"
+  "$NVC" $NVCF -M 2g -H 2g --work="gtb:$WDW/gtb" -L "$SYSBW" -e tb_gpu -gSLOWVRAM="${2:-0}" -gLOADV="'${LOADV:-0}'" -gLOGV="'${LOGV:-0}'" -gREADBACK="${READBACK:-0}" -gPROF="${PROF:-0}"
 fi
 cp "$1" "$WD/gp0.txt"
-"$NVC" $NVCF -M 2g -H 2g --work="gtb:$WDW/gtb" -L "$SYSBW" -r tb_gpu 2>&1 | grep -v "POLY\|GP0DISPATCH\|CPU2VRAM" | tail -5
+"$NVC" $NVCF -M 2g -H 2g --work="gtb:$WDW/gtb" -L "$SYSBW" -r tb_gpu 2>&1 | grep -v "POLY\|GP0DISPATCH\|CPU2VRAM" | tail -8

@@ -18,7 +18,7 @@ entity ddrram_model is
       outputVRAM3  : std_logic := '0';
       LOGVRAM      : std_logic := '1';  -- '0': no gra_fb_out.gra VRAM write log (faster long runs)
       INITFILE     : string := "NONE";   -- System 10: MEM board image preloaded at INITOFFSET
-      INITOFFSET   : integer := 16#2000000#  -- byte offset from DDR3 0x30000000
+      INITOFFSET   : integer := 16#0800000#  -- byte offset from DDR3 0x30000000
    );
    port 
    (
@@ -58,6 +58,12 @@ begin
       variable data : t_data := (others => 0);
       variable cmd_address_save : STD_LOGIC_VECTOR(DDRAM_ADDR'left downto 0);
       variable cmd_burst_save   : STD_LOGIC_VECTOR(DDRAM_BURSTCNT'left downto 0);
+      type t_rq_int  is array(0 to 15) of integer;
+      variable rq_addr  : t_rq_int;
+      variable rq_burst : t_rq_int;
+      variable rq_ready : t_rq_int;
+      variable rq_head, rq_cnt, rq_beat : integer := 0;
+      variable rq_cyc   : integer := 0;
       variable cmd_din_save     : STD_LOGIC_VECTOR(63 downto 0);
       variable cmd_be_save      : STD_LOGIC_VECTOR(7 downto 0);
       
@@ -202,29 +208,40 @@ begin
    
          wait until rising_edge(DDRAM_CLK);
          
+         -- reads: queued in order, each returns its burst after the latency (several reads may be in flight,
+         -- like the Avalon DDR3 port; the GPU issues back-to-back texture row reads)
+         rq_cyc := rq_cyc + 1;
+         DDRAM_DOUT_READY <= '0';
+         if (rq_cnt > 0) then
+            if (rq_cyc >= rq_ready(rq_head)) then
+               DDRAM_DOUT       <= std_logic_vector(to_signed(data(rq_addr(rq_head) + (rq_beat * 2) + 1), 32)) & 
+                                   std_logic_vector(to_signed(data(rq_addr(rq_head) + (rq_beat * 2) + 0), 32));
+               DDRAM_DOUT_READY <= '1';
+               if (rq_beat + 1 = rq_burst(rq_head)) then
+                  rq_beat := 0;
+                  rq_head := (rq_head + 1) mod 16;
+                  rq_cnt  := rq_cnt - 1;
+               else
+                  rq_beat := rq_beat + 1;
+               end if;
+            end if;
+         end if;
          if (DDRAM_RD = '1') then
-            cmd_address_save := intern_addr;
-            cmd_burst_save   := DDRAM_BURSTCNT;
-            wait until rising_edge(DDRAM_CLK);
+            waittiming := 0;
             if (SLOWTIMING > 0) then
                waittiming := SLOWTIMING;
                if (RANDOMTIMING = '1') then
                   uniform(seed1, seed2, rnd);
                   waittiming := waittiming + integer(floor(rnd * real(SLOWTIMING)));
                end if;
-               for i in 1 to waittiming loop
-                  wait until rising_edge(DDRAM_CLK);
-               end loop;
             end if;
-            --report "read from " & integer'image(to_integer(unsigned(cmd_address_save)));
-            for i in 0 to (to_integer(unsigned(cmd_burst_save)) - 1) loop
-               DDRAM_DOUT       <= std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 1), 32)) & 
-                                   std_logic_vector(to_signed(data(to_integer(unsigned(cmd_address_save)) + (i * 2) + 0), 32));
-               DDRAM_DOUT_READY <= '1';
-               wait until rising_edge(DDRAM_CLK);
-            end loop;
-            DDRAM_DOUT_READY <= '0';
-         end if;  
+            assert rq_cnt < 16 report "ddrram_model: read queue overflow" severity failure;
+            rq_addr((rq_head + rq_cnt) mod 16)  := to_integer(unsigned(intern_addr));
+            rq_burst((rq_head + rq_cnt) mod 16) := to_integer(unsigned(DDRAM_BURSTCNT));
+            -- first beat no earlier than the previous read's last beat (in order)
+            rq_ready((rq_head + rq_cnt) mod 16) := rq_cyc + 1 + waittiming;
+            rq_cnt := rq_cnt + 1;
+         end if;
          
          if (DDRAM_WE = '1') then
             DDRAM_BUSY       <= '1';

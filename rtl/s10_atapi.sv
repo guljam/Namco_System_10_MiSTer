@@ -16,9 +16,11 @@
 // [IMPLEMENTATION] The disc is an image mounted from the OSD on hps_io slot 0 (1 KB blocks, 16-bit data): a .bin
 // with 2352-byte raw sectors (recognised by the sync pattern of sector 0) or with 2048-byte sectors (.iso,
 // MODE1/2048 .bin), as chdman extractcd writes them. Sectors are delivered one at a time (2048 bytes = one DRQ
-// block) from two buffers; while one is delivered, the next sector is read ahead into the other, so the games'
-// sequential streaming normally finds its sector loaded. While a sector is not loaded the drive shows BSY; a DMA
-// started in the meantime waits (rdma_valid low).
+// block) from an 8-sector read-ahead cache: the drive keeps the sectors after the last one requested loaded (one
+// multi-block SD request per sector), so the games' streaming finds its sectors ready, as with MAME's instant
+// drive. Taiko streams its songs as SPU ADPCM and reads two sectors back to back at every SPU interrupt (~83 ms);
+// a drive still loading the second one makes the game miss the refill (the song then plays at half speed).
+// While a sector is not loaded the drive shows BSY; a DMA started in the meantime waits (rdma_valid low).
 module s10_atapi #(
     parameter int CLK_HZ = 33_868_800
 ) (
@@ -43,35 +45,39 @@ module s10_atapi #(
     input  wire        rdma_pop,
     output wire [31:0] rdma_data,
 
-    // hps_io slot 0 (1 KB blocks, 16-bit data)
+    // hps_io slot 0 (1 KB blocks, 16-bit data; one request of 2-3 blocks per sector)
     output reg  [31:0] sd_lba = 0,
+    output reg   [5:0] sd_blk_cnt = 0,    // blocks - 1
     output reg         sd_rd = 1'b0,
     input  wire        sd_ack,
-    input  wire  [8:0] sd_buff_addr,
+    input  wire [12:0] sd_buff_addr,
     input  wire [15:0] sd_buff_dout,
     input  wire        sd_buff_wr,
     input  wire        img_mounted,
     input  wire [63:0] img_size
 );
-    // ================================================================== sector buffers: 2 x 2048 bytes
-    // entry {b, e} holds 16-bit words 2e (bits 15:0) and 2e+1 (bits 31:16) of buffer b
-    reg [31:0] bram [0:1023];
+    // ================================================================== sector cache: 8 x 2048 bytes
+    // entry {slot, e} holds 16-bit words 2e (bits 15:0) and 2e+1 (bits 31:16) of the slot's sector; slot = lba[2:0]
+    // two plain 4096 x 16 RAMs (low / high half of each entry): one write port each, registered read -> M10K
+    reg [15:0] bram_lo [0:4095];
+    reg [15:0] bram_hi [0:4095];
     reg [31:0] bq = 0;
-    reg  [9:0] bra = 0;
+    reg [11:0] bra = 0;
     reg        bw_en = 1'b0, bw_hi = 1'b0;
-    reg  [9:0] bw_a = 0;
+    reg [11:0] bw_a = 0;
     reg [15:0] bw_d = 0;
     always @(posedge clk) begin
-        if (bw_en) begin
-            if (bw_hi) bram[bw_a][31:16] <= bw_d;
-            else       bram[bw_a][15:0]  <= bw_d;
-        end
-        bq <= bram[bra];
+        if (bw_en && !bw_hi) bram_lo[bw_a] <= bw_d;
+        bq[15:0] <= bram_lo[bra];
+    end
+    always @(posedge clk) begin
+        if (bw_en &&  bw_hi) bram_hi[bw_a] <= bw_d;
+        bq[31:16] <= bram_hi[bra];
     end
     assign rdma_data = bq;
 
-    reg  [1:0] bvalid = 0;
-    reg [31:0] btag0 = 0, btag1 = 0;
+    reg  [7:0] bvalid = 0;
+    reg [31:0] btag [0:7];
 
     // ================================================================== SD fetch engine
     reg        disc = 1'b0;               // image mounted
@@ -80,21 +86,21 @@ module s10_atapi #(
 
     localparam [1:0] F_IDLE = 2'd0, F_REQ = 2'd1, F_XFER = 2'd2;
     reg  [1:0] fst = F_IDLE;
-    reg        f_det = 1'b0, f_buf = 1'b0;
+    reg        f_det = 1'b0;
+    reg  [2:0] f_buf = 0;
     reg [31:0] f_lba = 0;
     reg [42:0] f_start = 0;               // image byte offset of the sector's 2048 data bytes
-    reg [32:0] f_blk = 0;                 // current 1 KB block
-    reg  [1:0] f_left = 0;                // blocks left including the current one
+    reg [32:0] f_blk = 0;                 // first 1 KB block of the request
     reg  [2:0] f_sync = 0;
 
-    // request from the command FSM (level, taken when the engine is idle)
-    reg        f_req = 1'b0, f_rbuf = 1'b0;
+    // sector to load next, chosen by the command FSM (taken when the engine is idle)
+    reg        f_want = 1'b0;
     reg [31:0] f_rlba = 0;
 
     wire [42:0] raw_off = {f_rlba, 11'd0} + {f_rlba, 8'd0} + {f_rlba, 5'd0} + {f_rlba, 4'd0} + 43'd16;  // x2352 + 16
     wire [42:0] iso_off = {f_rlba, 11'd0};
     wire [42:0] s_off   = raw ? raw_off : iso_off;
-    wire [42:0] rel     = {f_blk, 10'd0} + {33'd0, sd_buff_addr, 1'b0} - f_start;
+    wire [42:0] rel     = {f_blk, 10'd0} + {29'd0, sd_buff_addr, 1'b0} - f_start;   // byte offset in the sector
 
     always @(posedge clk) begin
         bw_en <= 1'b0;
@@ -112,16 +118,17 @@ module s10_atapi #(
                 F_IDLE:
                     if (detect) begin
                         f_det <= 1'b1; f_sync <= 0;
-                        f_blk <= 0; f_left <= 2'd1;
+                        f_blk <= 0; sd_blk_cnt <= 6'd0;
                         sd_lba <= 0; sd_rd <= 1'b1; fst <= F_REQ;
-                    end else if (f_req) begin
+                    end else if (f_want) begin
+                        // the whole sector in one request: 2 blocks if it starts on a block boundary, else 3
                         f_det   <= 1'b0;
-                        f_buf   <= f_rbuf;
+                        f_buf   <= f_rlba[2:0];
                         f_lba   <= f_rlba;
-                        bvalid[f_rbuf] <= 1'b0;
+                        bvalid[f_rlba[2:0]] <= 1'b0;
                         f_start <= s_off;
                         f_blk   <= s_off[42:10];
-                        f_left  <= (s_off[9:0] == 10'd0) ? 2'd2 : 2'd3;
+                        sd_blk_cnt <= (s_off[9:0] == 10'd0) ? 6'd1 : 6'd2;
                         sd_lba  <= s_off[41:10];
                         sd_rd   <= 1'b1; fst <= F_REQ;
                     end
@@ -140,18 +147,11 @@ module s10_atapi #(
                         end
                     end
                     if (!sd_ack) begin
-                        if (f_left == 2'd1) begin
-                            fst <= F_IDLE;
-                            if (f_det) begin detect <= 1'b0; raw <= &f_sync; end
-                            else begin
-                                bvalid[f_buf] <= 1'b1;
-                                if (f_buf) btag1 <= f_lba; else btag0 <= f_lba;
-                            end
-                        end else begin
-                            f_left <= f_left - 1'd1;
-                            f_blk  <= f_blk + 1'd1;
-                            sd_lba <= sd_lba + 1'd1;
-                            sd_rd  <= 1'b1; fst <= F_REQ;
+                        fst <= F_IDLE;
+                        if (f_det) begin detect <= 1'b0; raw <= &f_sync; end
+                        else if (!img_mounted) begin
+                            bvalid[f_buf] <= 1'b1;
+                            btag[f_buf]   <= f_lba;
                         end
                     end
                 end
@@ -160,6 +160,7 @@ module s10_atapi #(
         end
     end
     wire f_idle = (fst == F_IDLE) && !detect;
+    wire f_busy = (fst != F_IDLE);
 
     // ================================================================== IDENTIFY PACKET DEVICE (MAME matsushita_cr589_device,
     // as read by taiko2): firmware "1.0", model "MATSHITA CR-589", word 49 = 0x0400
@@ -198,7 +199,7 @@ module s10_atapi #(
     reg [31:0] r_lba = 0;                 // next sector to deliver
     reg [23:0] r_left = 0;                // sectors still to deliver
     reg        r_dma = 1'b0;
-    reg        cur = 1'b0;                // buffer being delivered
+    reg  [2:0] cur = 0;                   // cache slot being delivered
     reg  [9:0] ptr = 0;                   // 16-bit word index in the data block
     reg [15:0] tmr = 0;
     reg        tmr_rst = 1'b0;            // timer end = soft reset (signature)
@@ -207,7 +208,7 @@ module s10_atapi #(
 
     // buffer read address follows the data pointer; bq is valid two clocks after ptr/cur change
     always @(posedge clk) bra <= {cur, ptr[9:1]};
-    reg  [9:0] bra_q = 0;
+    reg [11:0] bra_q = 0;
     always @(posedge clk) bra_q <= bra;
     wire       bq_ok = (bra == {cur, ptr[9:1]}) && (bra_q == bra);
 
@@ -243,9 +244,14 @@ module s10_atapi #(
                          (op == 8'hA8) ? {pkt[7], pkt[8], pkt[9]} : 24'd0;
     wire        p_read = (op == 8'hBE) || (op == 8'h28) || (op == 8'hA8);
 
-    wire        in0 = bvalid[0] && btag0 == r_lba;
-    wire        in1 = bvalid[1] && btag1 == r_lba;
-    wire [31:0] tag_other = cur ? btag0 : btag1;
+    // cache lookup: sector l is in slot l[2:0]
+    wire        hit_now = bvalid[r_lba[2:0]] && btag[r_lba[2:0]] == r_lba;
+    // read-ahead window r_lba .. r_lba+7 (the next sector to deliver and the 7 after it), probed one position per
+    // clock; the first missing sector is loaded next. While a sector is delivered (P_DATA) r_lba is that sector, so
+    // its slot is never the one being loaded.
+    reg  [2:0] ra_i = 0;
+    wire [31:0] ra_l  = r_lba + {29'd0, ra_i};
+    wire        ra_in = bvalid[ra_l[2:0]] && btag[ra_l[2:0]] == ra_l;
 
     task automatic complete(input logic e, input [7:0] er);
         phase  <= P_IDLE;
@@ -298,12 +304,12 @@ module s10_atapi #(
     always @(posedge clk) begin
         rdata  <= 0;
         pkt_go <= 1'b0;
-        if (fst != F_IDLE) f_req <= 1'b0;   // request taken
+        if (f_busy) f_want <= 1'b0;         // request taken
 
         if (reset || !enable) begin
             bsy <= 1'b0; drdy <= 1'b0; drq <= 1'b0; err <= 1'b0; irq <= 1'b0;
             error <= 8'h01; feature <= 0; count <= 8'h01; sector <= 8'h01; cyl_lo <= 8'h14; cyl_hi <= 8'hEB;
-            devhead <= 0; phase <= P_IDLE; rdma_valid <= 1'b0; r_dma <= 1'b0; f_req <= 1'b0;
+            devhead <= 0; phase <= P_IDLE; rdma_valid <= 1'b0; r_dma <= 1'b0; f_want <= 1'b0;
         end else begin
             // ---- bus reads (MAME 16-bit handlers: low half, then high half)
             if (rd && hit) begin
@@ -349,20 +355,21 @@ module s10_atapi #(
                 if (r_left == 0) begin
                     complete(1'b0, 8'h00);
                     r_dma <= 1'b0;
-                end else if (in0 || in1) begin
+                end else if (hit_now) begin
                     bsy <= 1'b0; drq <= 1'b1; phase <= P_DATA;
-                    cur <= in1; ptr <= 0;
+                    cur <= r_lba[2:0]; ptr <= 0;
                     cyl_lo <= 8'h00; cyl_hi <= 8'h08;   // 0x800 bytes
                     count  <= 8'h02;                    // IO
                     if (!r_dma) irq <= 1'b1;
                 end else begin
                     bsy <= 1'b1;
-                    if (f_idle && !f_req) begin f_req <= 1'b1; f_rbuf <= !cur; f_rlba <= r_lba; end
+                    if (f_idle && !f_want) begin f_want <= 1'b1; f_rlba <= r_lba; ra_i <= 0; end
                 end
             end
-            // read ahead the following sector into the other buffer
-            if (phase == P_DATA && f_idle && !f_req && !(bvalid[!cur] && tag_other == r_lba + 1'd1)) begin
-                f_req <= 1'b1; f_rbuf <= !cur; f_rlba <= r_lba + 1'd1;
+            // read ahead (not while a missing sector is being waited for: that one is loaded first, above)
+            if (disc && f_idle && !f_want && !(phase == P_WAIT && !hit_now)) begin
+                if (!ra_in) begin f_want <= 1'b1; f_rlba <= ra_l; end
+                ra_i <= ra_in ? ra_i + 1'd1 : 3'd0;
             end
 
             // ---- SET FEATURES / DEVICE RESET busy time

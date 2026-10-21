@@ -21,8 +21,9 @@ architecture sim of tb_atapi is
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0);
          intrq : out std_logic; dma_pending : out std_logic; rdma_valid : out std_logic;
          rdma_pop : in std_logic; rdma_data : out std_logic_vector(31 downto 0);
-         sd_lba : out std_logic_vector(31 downto 0); sd_rd : out std_logic; sd_ack : in std_logic;
-         sd_buff_addr : in std_logic_vector(8 downto 0); sd_buff_dout : in std_logic_vector(15 downto 0);
+         sd_lba : out std_logic_vector(31 downto 0); sd_blk_cnt : out std_logic_vector(5 downto 0);
+         sd_rd : out std_logic; sd_ack : in std_logic;
+         sd_buff_addr : in std_logic_vector(12 downto 0); sd_buff_dout : in std_logic_vector(15 downto 0);
          sd_buff_wr : in std_logic; img_mounted : in std_logic; img_size : in std_logic_vector(63 downto 0)
       );
    end component;
@@ -42,7 +43,8 @@ architecture sim of tb_atapi is
    signal sd_lba : std_logic_vector(31 downto 0);
    signal sd_rd : std_logic;
    signal sd_ack : std_logic := '0';
-   signal sd_buff_addr : std_logic_vector(8 downto 0) := (others => '0');
+   signal sd_buff_addr : std_logic_vector(12 downto 0) := (others => '0');
+   signal sd_blk_cnt : std_logic_vector(5 downto 0);
    signal sd_buff_dout : std_logic_vector(15 downto 0) := (others => '0');
    signal sd_buff_wr : std_logic := '0';
    signal img_mounted : std_logic := '0';
@@ -65,7 +67,7 @@ begin
       port map (clk => clk, reset => reset, enable => '1', addr => addr, wdata => wdata, wmask => wmask, size => size,
                 rd => rd, wr => wr, rdata => rdata, intrq => intrq, dma_pending => dma_pending,
                 rdma_valid => rdma_valid, rdma_pop => rdma_pop, rdma_data => rdma_data,
-                sd_lba => sd_lba, sd_rd => sd_rd, sd_ack => sd_ack, sd_buff_addr => sd_buff_addr,
+                sd_lba => sd_lba, sd_blk_cnt => sd_blk_cnt, sd_rd => sd_rd, sd_ack => sd_ack, sd_buff_addr => sd_buff_addr,
                 sd_buff_dout => sd_buff_dout, sd_buff_wr => sd_buff_wr, img_mounted => img_mounted, img_size => img_size);
 
    -- disc blocks + expected sector sums
@@ -100,9 +102,9 @@ begin
       wait;
    end process;
 
-   -- hps_io slot model: 1 KB blocks, 16-bit words
+   -- hps_io slot model: 1 KB blocks, 16-bit words; sd_blk_cnt + 1 blocks per request, buffer address counting on
    process
-      variable k, blk : integer;
+      variable k, blk, nblk : integer;
    begin
       wait until loaded = '1';
       wait until rising_edge(clk);
@@ -113,21 +115,24 @@ begin
       loop
          wait until rising_edge(clk);
          if sd_rd = '1' then
-            blk := to_integer(unsigned(sd_lba));
-            k := -1;
-            for i in 0 to nb - 1 loop
-               if bnum(i) = blk then k := i; exit; end if;
-            end loop;
-            assert k >= 0 report "block " & integer'image(blk) & " not prepared" severity failure;
+            nblk := to_integer(unsigned(sd_blk_cnt)) + 1;
             for i in 1 to 40 loop wait until rising_edge(clk); end loop;
             sd_ack <= '1';
-            for i in 0 to 511 loop
-               wait until rising_edge(clk);
-               sd_buff_addr <= std_logic_vector(to_unsigned(i, 9));
-               sd_buff_dout <= std_logic_vector(to_unsigned(store(k)(i), 16));
-               sd_buff_wr <= '1';
-               wait until rising_edge(clk);
-               sd_buff_wr <= '0';
+            for b in 0 to nblk - 1 loop
+               blk := to_integer(unsigned(sd_lba)) + b;
+               k := -1;
+               for i in 0 to nb - 1 loop
+                  if bnum(i) = blk then k := i; exit; end if;
+               end loop;
+               assert k >= 0 report "block " & integer'image(blk) & " not prepared" severity failure;
+               for i in 0 to 511 loop
+                  wait until rising_edge(clk);
+                  sd_buff_addr <= std_logic_vector(to_unsigned(512 * b + i, 13));
+                  sd_buff_dout <= std_logic_vector(to_unsigned(store(k)(i), 16));
+                  sd_buff_wr <= '1';
+                  wait until rising_edge(clk);
+                  sd_buff_wr <= '0';
+               end loop;
             end loop;
             wait until rising_edge(clk);
             sd_ack <= '0';

@@ -1423,7 +1423,10 @@ begin
             
             -- processing
             spu_tick <= '0';
-            if (sampleticks < 767) then
+            -- Namco System 10: the CXD2938Q runs from 101.4912 MHz / 2 (MAME: SPU clock 50.7456 MHz), 1.5x the
+            -- PlayStation's, so its 768 clocks per sample give 66.15 kHz: 512 clk1x (33.8688 MHz) per sample here.
+            -- At 44.1 kHz all System 10 sound played at 2/3 speed and a fifth low (Taiko songs, voices).
+            if (sampleticks < 511) then
                sampleticks <= sampleticks + 1;
             else
                sampleticks <= (others => '0');
@@ -1849,13 +1852,15 @@ begin
                   
                   ram_Adr         <= std_logic_vector(ramTransferAddr);
                   
-                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0') then
+                  -- System 10 (512 clk per sample): no data transfer while samples are stashed, so a sample upload
+                  -- cannot push the voice processing behind until samples are lost (the DMA just waits)
+                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0' and stashedSamples = 0) then
                      state           <= RAM_READ;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
                      ram_rnw         <= '1';
                      ramTransferAddr <= ramTransferAddr + 2;
-                  elsif (FifoIn_Empty = '0') then
+                  elsif (FifoIn_Empty = '0' and stashedSamples = 0) then
                      state           <= RAM_WRITE;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
@@ -2495,7 +2500,7 @@ begin
       if (rising_edge(clk1x)) then
          
          SS_idle <= '0';
-         if ((FifoIn_Empty = '1' or ss_timeout(23) = '1') and (FifoOut_Empty = '1' or ss_timeout(23) = '1') and state = IDLE and sampleticks < 760 and sampleticks > 0 and stashedSamples = 0) then
+         if ((FifoIn_Empty = '1' or ss_timeout(23) = '1') and (FifoOut_Empty = '1' or ss_timeout(23) = '1') and state = IDLE and sampleticks < 504 and sampleticks > 0 and stashedSamples = 0) then
             SS_idle    <= '1';
             if (FifoIn_Empty = '1' and FifoOut_Empty = '1') then
                ss_timeout <= (others => '0');

@@ -87,6 +87,7 @@ architecture arch of gpu_rect is
       WAITIMING
    );
    signal state : tState := IDLE;
+   signal prof_state : integer := 0;   -- simulation profiling (sim/gpu): state as an integer
    
    signal drawTiming          : unsigned(31 downto 0);
    signal targetTiming        : unsigned(31 downto 0);
@@ -117,7 +118,9 @@ architecture arch of gpu_rect is
    
    signal timeout             : integer range 0 to 1048575 := 0;
 
-begin 
+begin
+
+   prof_state <= tState'pos(state); 
 
    requestFifo <= '1' when (state = REQUESTPOS or state = REQUESTTEXTURE or state = REQUESTSIZE) else '0';
    

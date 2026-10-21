@@ -19,6 +19,8 @@
 //   0x3751       0x17 = set timer outputs from 0x374E-0x3750, then cleared
 // Over boot, attract and play the game reads only 0x3008, 0x3020-0x302F and 0x3033 (MAME read watchpoints);
 // nothing else of the program image is ever read back, so no RAM is kept for it.
+// GAHAHA Ippatsudou 1 / 2 run the same kind of program; their ADC inputs are two analog sticks per player
+// (EXIO_ANALOG1-8 = P1 left X, left Y, right X, right Y, then P2), 10-bit values in the same ADREG format.
 module s10_exio #(
     parameter int CLK_HZ = 33_868_800
 ) (
@@ -34,7 +36,9 @@ module s10_exio #(
     input  wire        wr,
     output reg  [31:0] rdata = 0,
 
-    input  wire  [7:0] drum                // 1 = hit, bit n = EXIO_ANALOG(n+1)
+    input  wire  [7:0] drum,               // 1 = hit, bit n = EXIO_ANALOG(n+1)
+    input  wire        analog_en,          // ADC = analog values (GAHAHA) instead of drum hits
+    input  wire [79:0] analog              // 10 bits per channel, channel n at [10n +: 10] = EXIO_ANALOG(n+1)
 );
     reg  [15:0] ctrl = 0, bus_req = 0;
     reg         active = 1'b0;
@@ -50,7 +54,8 @@ module s10_exio #(
 
     function automatic [7:0] ram_r(input [14:0] k);
         logic [15:0] w;
-        w = drum[k[3:1]] ? 16'hFFFF : 16'h003F;
+        if (analog_en) w = {analog[10*k[3:1] +: 10], 6'h3F};
+        else           w = drum[k[3:1]] ? 16'hFFFF : 16'h003F;
         if (k >= 15'h3020 && k <= 15'h302F) ram_r = k[0] ? w[15:8] : w[7:0];
         else case (k)
             15'h3008: ram_r = alive;

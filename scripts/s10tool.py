@@ -4,7 +4,7 @@
   s10tool.py mra                      write MRA/*.mra (main sets) and MRA/_alternatives/... (clones)
   s10tool.py record SET OUT           write the board record (MRA index 1) as a binary file
   s10tool.py images SET DIR           write what the core holds after loading SET: bios.bin (descrambled
-                                      4 MB BIOS, SDRAM 0x400000), ddr.bin (MEM board image, DDR3 0x32000000),
+                                      4 MB BIOS, SDRAM 0x400000), ddr.bin (MEM board image, DDR3 0x30800000),
                                       record.bin - for the simulation benches
   s10tool.py check [SET ...]          compare bios.bin with MAME's maincpu:rom after driver init
                                       (local/mame/bios_<set>.bin, written by local/mame/dumpbios.lua)
@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROMDIR = os.path.join(os.path.expanduser("~"), "Downloads", "mame", "roms")
 CORE = "Namco_S10"
 MAMEVER = "0289"
-DDR3_IMG = 0x32000000            # MEM board image (s10_loader IMG_BASE = 0x2000000 from 0x30000000)
+DDR3_IMG = 0x30800000            # MEM board image (s10_loader IMG_BASE = 0x0800000 from 0x30000000)
 MEMN_PAGE = 0x210
 MEMN_BIOS_FIRST, MEMN_BIOS_END = 0x40, 0x2020   # NAND0 pages copied by memn_driver_init
 MEMM_BIOS_LEN = 0x62000
@@ -47,6 +47,17 @@ BOARDS = {
         exio=0x30, exio_mcu=True, cdrom=True, category="Rhythm", joystick="2-way vertical",
         # Enter / Select Up-Down on IN1; drum zones on the EXIO ADC (P1 and P2 from each player's pad)
         buttons=("Enter,Left Don,Right Don,Left Ka,Right Ka,-,-,Coin,Test,Service,Pause", "A,B,X,L,R,Y,Start,Select,L2,R2,R3"),
+    ),
+    # GAHAHA Ippatsudou: EXIO board with MCU (high-level), its ADC = two analog sticks per player; own IN1 layout
+    "gahaha_family": dict(
+        board="N", crypt=2, nand_big=False, xor=0xAAAA, save_base=0x4200, save_size=0x4200,
+        exio=0x30, exio_mcu=True, exio_analog=True, manufacturer="Namco / Metro", category="Party", joystick="2-way vertical",
+        buttons=("Button 1,Button 2,Enter,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
+    ),
+    # MEM(P3): MEM(N) NAND board + TMP95C061 MCU with 8 MB SDRAM and an LC82310 MP3 decoder (the music; the core plays
+    # pre-converted audio from the SD card, see tools/p3audio.py), 6-14 x K9F2808U0B
+    "p3_family": dict(
+        board="N", crypt=2, nand_big=False, xor=0xAAAA, save_base=0x4200, save_size=0x4200, memp3=True,
     ),
     "gamshara_family": dict(
         board="N", crypt=2, nand_big=False,
@@ -130,25 +141,75 @@ GAMES = {
                       family="taiko_family", t2=ns10crypt.TAIKO2, disc="nm-002",
                       nands=[("tk21verc_0.8e", "f3842791"), ("tk21verc_1.8d", "e294f460"), ("tk21verc_2.7e", "f1dbe387")],
                       perm=(0xc, 0xd, 0xe, 0xf, 0x9, 0x8, 0xb, 0xa, 0x6, 0x4, 0x7, 0x5, 0x2, 0x3, 0x0, 0x1)),
-    "taiko4":    dict(name="Taiko no Tatsujin 4 (Japan, TK41 Ver.A)", parent=None, region="Japan", year=2003,
+    "taiko3":    dict(name="Taiko no Tatsujin 3 (Japan, TK31 Ver.A)", parent=None, region="Japan", year=2002,
+                      family="taiko_family", t2=ns10crypt.TAIKO3, disc="nm-003",
+                      nands=[("tk31vera_0.8e", "54add039"), ("tk31vera_1.8d", "384c9692"), ("tk31vera_2.7e", "904c09ee")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x9, 0x8, 0xb, 0x4, 0x5, 0x6, 0x7, 0x0, 0x1, 0x3, 0x2)),
+    "taiko4":    dict(name="Taiko no Tatsujin 4 (Japan, TK41 Ver.A)", parent=None, region="Japan", year=2002,
                       family="taiko_family", t2=ns10crypt.TAIKO4, disc="tk-41",
                       nands=[("tk41vera_0.8e", "6dc209b1"), ("tk41vera_1.8d", "0d1731d8"), ("tk41vera_2.7e", "6fc63af0")],
                       perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0x8, 0xb, 0xa, 0x5, 0x4, 0x6, 0x7, 0x2, 0x3, 0x0, 0x1)),
+    "taiko5":    dict(name="Taiko no Tatsujin 5 (Japan, TK51 Ver.A)", parent=None, region="Japan", year=2003,
+                      family="taiko_family", t2=ns10crypt.TAIKO5, disc="tk-5",
+                      nands=[("tk51vera_0.8e", "e2c9e74a"), ("tk51vera_1.8d", "63ffbcaa"), ("tk51vera_2.7e", "1f419247")],
+                      perm=(0xe, 0xf, 0xc, 0xd, 0xa, 0x8, 0xb, 0x9, 0x4, 0x5, 0x7, 0x6, 0x2, 0x1, 0x0, 0x3)),
     "taiko6":    dict(name="Taiko no Tatsujin 6 (Japan, TK61 Ver.A)", parent=None, region="Japan", year=2004,
                       family="taiko_family", t2=ns10crypt.TAIKO6, disc="tk-6",
                       nands=[("tk61vera_0.8e", "a07936c6"), ("tk61vera_1.8d", "288fb1aa"), ("tk61vera_2.7e", "550bb6a1")],
                       perm=(0xe, 0xc, 0xf, 0xd, 0x9, 0xb, 0x8, 0xa, 0x5, 0x4, 0x7, 0x6, 0x2, 0x1, 0x0, 0x3)),
+    "taikort":   dict(name="Taiko no Tatsujin RT: Nippon no Kokoro (Japan, TKN1 Ver.A)", parent=None, region="Japan",
+                      year=2004, family="taiko_family", t2=ns10crypt.TAIKORT, disc="tk-n",
+                      nands=[("tkn1vera_0.8e", "8d4a0234"), ("tkn1vera_1.8d", "66ac3551"), ("tkn1vera_2.7e", "ac0b5f03")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0x8, 0xb, 0xa, 0x9, 0x5, 0x7, 0x4, 0x6, 0x2, 0x3, 0x0, 0x1)),
 }
-MAIN = {"mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
+GAMES.update({
+    "gahaha":    dict(name="GAHAHA Ippatsudou (World, GID2 Ver.A)", parent=None, region="World", year=2000,
+                      family="gahaha_family", t2=ns10crypt.GAHAHA,
+                      nands=[("gid2vera_0.8e", "d7888ca3"), ("gid2vera_1.8d", "102932a7"), ("gid2vera_2.7e", "df8ec017")],
+                      perm=(0xd, 0xe, 0xc, 0xf, 0xa, 0x8, 0xb, 0x9, 0x6, 0x7, 0x4, 0x5, 0x0, 0x3, 0x2, 0x1)),
+    "gahaha2":   dict(name="GAHAHA Ippatsudou 2 (Japan, GIS1 Ver.A)", parent=None, region="Japan", year=2001,
+                      family="gahaha_family", t2=ns10crypt.GAHAHA2,
+                      nands=[("gis1vera_0.8e", "d1e4a8b8"), ("gis1vera_1.8d", "eeb680ac"), ("gis1vera_2.7e", "d22c9ee1")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x9, 0x8, 0xb, 0x4, 0x5, 0x6, 0x7, 0x0, 0x1, 0x3, 0x2)),
+})
+GAMES.update({
+    "g13jnr":    dict(name="Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A)", parent=None, region="Japan", year=2001,
+                      family="p3_family", t2=ns10crypt.G13JNR, manufacturer="Eighting / Raizing / Namco", in1_layout=1, gun=True,
+                      category="Shooter", joystick="lightgun",
+                      buttons=("Enter,Trigger,Scope Sensor,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
+                      nands=[("glt1vera_0.2j", "24f5bb06"), ("glt1vera_1.1j", "5ec552da"), ("glt1vera_2.2h", "0835d6ed"),
+                             ("glt1vera_3.1h", "f7486979"), ("glt1vera_4.2f", "e60b526a"), ("glt1vera_5.1f", "0cb2df20")],
+                      perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0xb, 0x8, 0xa, 0x6, 0x7, 0x4, 0x5, 0x1, 0x3, 0x0, 0x2)),
+    "nicetsuk":  dict(name="Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A)", parent=None, region="Japan", year=2002,
+                      family="p3_family", t2=ns10crypt.NICETSUK, manufacturer="Namco / Metro", in1_layout=2,
+                      category="Party", joystick="2-way vertical",
+                      buttons=("Forehead,Chest,Back of Head,Pedal,Enter,-,Choose,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
+                      nands=[("ntk1vera_0.2j", "92b60f09"), ("ntk1vera_1.1j", "5d5a4ca2"), ("ntk1vera_2.2h", "df2ba95f"),
+                             ("ntk1vera_3.1h", "ee0c6a94"), ("ntk1vera_4.2f", "cf9ad49e"), ("ntk1vera_5.1f", "cf73d26b"),
+                             ("ntk1vera_6.2e", "ee63d5ee"), ("ntk1vera_7.1e", "5c8981e4")],
+                      perm=(0xc, 0xf, 0xe, 0xd, 0xa, 0x8, 0xb, 0x9, 0x5, 0x4, 0x6, 0x7, 0x2, 0x3, 0x0, 0x1)),
+    "squizchs":  dict(name="Seishun-Quiz Colorful High School (CHS1 Ver.A)", parent=None, region="Japan", year=2003,
+                      family="p3_family", t2=ns10crypt.SQUIZCHS, manufacturer="Namco", in1_layout=3,
+                      category="Quiz", joystick="none",
+                      buttons=("Button 1,Button 2,Button 3,Button 4,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
+                      nands=[("chs1vera_0.2j", "2e92071c"), ("chs1vera_1.1j", "85212a85"), ("chs1vera_2.2h", "6a6a1ee7"),
+                             ("chs1vera_3.1h", "b7ccfaf6"), ("chs1vera_4.2f", "6623029d"), ("chs1vera_5.1f", "5f771c16"),
+                             ("chs1vera_6.2e", "840514fd"), ("chs1vera_7.1e", "24c38637"), ("chs1vera_8.2d", "d59d87ec"),
+                             ("chs1vera_9.1d", "822532d8"), ("chs1vera_10.2c", "46752e59"), ("chs1vera_11.1c", "fc9ed471"),
+                             ("chs1vera_12.2b", "ab786753"), ("chs1vera_13.1b", "739e3b1e")],
+                      perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x8, 0xb, 0x9, 0x6, 0x4, 0x7, 0x5, 0x0, 0x1, 0x3, 0x2)),
+})
+MAIN = {"g13jnr": "g13jnr", "nicetsuk": "nicetsuk", "squizchs": "squizchs", "gahaha": "gahaha", "gahaha2": "gahaha2", "mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
         "ptblank3": "ptblank3", "gunbalina": "ptblank3", "gamshara": "gamshara", "gamsharao": "gamshara",
-        "konotako": "konotako", "taiko2": "taiko2", "taiko4": "taiko4", "taiko6": "taiko6", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
+        "konotako": "konotako", "taiko2": "taiko2", "taiko3": "taiko3", "taiko4": "taiko4", "taiko5": "taiko5", "taiko6": "taiko6",
+        "taikort": "taikort", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
         "panikuru": "panikuru", "startrgn": "startrgn"}
 ALT_DIR = {"mrdrilr2": "_Mr. Driller 2", "ptblank3": "_Point Blank 3", "gamshara": "_Gamshara"}
 BUTTONS = ("Drill,-,-,-,-,-,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3")  # J1 order: Buttons 1-6, Start, Coin, Test, Service, Pause
 # DIP switches (MRA <switches>, ioctl index 254): one byte = MAME's SYSTEM port bits 7-0, active low,
 # SW1:1 = bit 7 ... SW1:8 = bit 0. Games without named switches get SW1-1..8.
 GENERIC_DIPS = [(f"SW1-{n}", str(8 - n), None, "On,Off") for n in range(1, 9)]
-NL_OFF = 0x6400000               # nonlinear decrypter table in the DDR3 image (s10_loader NL_OFF)
+NL_OFF = 0xF000000               # nonlinear decrypter table in the DDR3 image (s10_loader NL_OFF): 0x3F800000
 
 
 def game(setname):
@@ -162,18 +223,21 @@ def game(setname):
 def record(setname):
     """Board record, docs/ARCHITECTURE.md section 5 (464 bytes, little endian)."""
     g = game(setname)
-    r = bytearray(464)
+    t2 = g.get("t2")
+    terms = ns10crypt.terms_of(t2) if t2 else []
+    r = bytearray(464 + 32 * max(0, len(terms) - 1))
     r[0:4] = b"S10B"
     r[4] = 0 if g["board"] == "M" else 1
     r[5] = g["crypt"]
     r[6] = len(g.get("nands", [])) if g["board"] == "N" else 0
-    r[7] = 1 if g.get("nand_big") else 0
+    r[7] = (1 if g.get("nand_big") else 0) | (g.get("in1_layout", 0) << 4)
     struct.pack_into("<H", r, 8, g["xor"])
     r[10:26] = bytes(g["perm"])
     r[26] = g.get("exio", 0xFF)                     # EXIO ident (0xFF = no expansion board)
     t2 = g.get("t2")
     r[27] = ((1 if t2 and "table" in t2 else 0) | (2 if g.get("gun") else 0) |
-             (4 if g.get("cdrom") else 0) | (8 if g.get("exio_mcu") else 0))
+             (4 if g.get("cdrom") else 0) | (8 if g.get("exio_mcu") else 0) | (16 if g.get("exio_analog") else 0) |
+             (32 if g.get("memp3") else 0))
     struct.pack_into("<I", r, 28, g["save_base"])
     if t2:
         for j in range(16):
@@ -181,8 +245,11 @@ def record(setname):
             struct.pack_into("<Q", r, 160 + 8 * j, t2["dmask"][j])
             struct.pack_into("<Q", r, 296 + 8 * j, t2["ivtab"][j])
         struct.pack_into("<H", r, 288, t2["xmask"])
-        struct.pack_into("<QQQQ", r, 424, t2["ac"], t2["ap"], t2["bc"], t2["bp"])
+        # term 0 at 424, terms 1.. at 464 + 32 (t - 1); count at 458 (s10_crypt_t2s, serial)
+        for t, (ac, ap, bc, bp) in enumerate(terms):
+            struct.pack_into("<QQQQ", r, 424 if t == 0 else 464 + 32 * (t - 1), ac, ap, bc, bp)
         struct.pack_into("<H", r, 456, t2["out"])
+        r[458] = len(terms) if len(terms) > 1 else 0
         if "table" in t2:
             struct.pack_into("<I", r, 460, t2["table"][2] * 8)
     return bytes(r)
@@ -200,7 +267,7 @@ def mra_text(setname):
          "",
          "  index 1  board record (MEM board type, descrambler, KEYCUS decrypter parameters)",
          "  index 0  BIOS part of the first flash / NAND (descrambled by the core into SDRAM)",
-         "  index 2  MEM board image -> DDR3 0x32000000 (fast loading)",
+         "  index 2  MEM board image -> DDR3 0x30800000 (fast loading)",
          "  index 3  MEM(M) data mask ROMs -> DDR3 0x32800000 (fast loading)",
          f"  index 4  type-2 nonlinear bit table -> DDR3 0x{DDR3_IMG + NL_OFF:08X} (Point Blank 3 family)",
          f"  index 9  settings (nvram): image offset 0x{g['save_base']:X}, {g['save_size']} bytes",

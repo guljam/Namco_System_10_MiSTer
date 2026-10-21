@@ -18,8 +18,8 @@
 // to DDR3 here. The PSX is held in reset during downloads, so the writer owns the PSX DDR3 port (top level).
 module s10_loader #(
     parameter [26:0] BIOS_SDRAM = 27'h0400000,
-    parameter [27:0] IMG_BASE   = 28'h2000000,    // DDR3 0x32000000
-    parameter [27:0] NL_OFF     = 28'h6400000     // nonlinear table: DDR3 0x38400000 (above the largest MEM(N) image)
+    parameter [27:0] IMG_BASE   = 28'h0800000,    // DDR3 0x30800000 (up to 232 MB: Seishun Quiz has 14 NANDs)
+    parameter [27:0] NL_OFF     = 28'hF000000     // nonlinear table: DDR3 0x3F800000 (above the images and the MEM(P3) MCU RAM)
 ) (
     input  wire         clk,                // clk_1x (hps_io clk_sys)
     input  wire         clk2,               // clk_2x (DDR3)
@@ -43,14 +43,20 @@ module s10_loader #(
     output wire         light_gun,          // record byte 27 bit 1: light guns on the EXIO board
     output wire         cdrom,              // record byte 27 bit 2: ATAPI CD-ROM drive (Taiko no Tatsujin)
     output wire         exio_mcu,           // record byte 27 bit 3: EXIO board with microcontroller (high-level)
+    output wire         exio_analog,        // record byte 27 bit 4: EXIO ADC = analog sticks, GAHAHA IN1 layout
+    output wire         memp3,              // record byte 27 bit 5: MEM(P3) board (MCU RAM window, MP3 audio)
+    output wire   [3:0] in1_layout,         // record byte 7 bits 7-4: IN1 layout (0 standard, 1 Golgo 13, 2 Nice
+                                            // Tsukkomi, 3 Seishun Quiz)
     output wire [20:0]  nl_bits,            // record bytes 460-463: table length in bits
     output wire [27:0]  save_base,
-    output wire [1023:0] t2_emask,
-    output wire [1023:0] t2_dmask,
-    output wire [15:0]  t2_xmask,
-    output wire [1023:0] t2_iv,
-    output wire [63:0]  t2_nl_ac, t2_nl_ap, t2_nl_bc, t2_nl_bp,
-    output wire [15:0]  t2_nl_out,
+    // type-2 decrypter mask rows -> s10_crypt_t2s RAM (row, 16-bit lane), streamed from the record
+    output reg          t2_row_we = 1'b0,
+    output reg   [5:0]  t2_row_addr = 0,
+    output reg   [2:0]  t2_row_lane = 0,
+    output reg  [15:0]  t2_row_data = 0,
+    output reg  [15:0]  t2_xmask = 0,
+    output reg  [15:0]  t2_nl_out = 0,
+    output reg   [2:0]  t2_nterms = 0,      // record byte 458 (0 = one term)
     output reg          record_ok = 1'b0,
 
     // ---- SDRAM channel 3 (s10_ch3): BIOS words and fills
@@ -75,30 +81,45 @@ module s10_loader #(
     // =====================================================================================================
     // Board record: 464 bytes
     // =====================================================================================================
-    localparam int RECB = 464;
-    reg  [8*RECB-1:0] rec = 0;
+    // Only the 32-byte header and a few fields are kept in registers; the decrypter masks (bytes 32-287:
+    // emask/dmask, 296-423: IV table, 424-455: term 0, 464+32(t-1): term t) go to the decrypter's RAM.
+    localparam int RECB = 1024;
+    reg  [255:0] rec = 0;                  // bytes 0-31
+    reg   [31:0] nlb = 0;                  // bytes 460-463
 
     assign board_memn  = rec[8*4 +: 8] == 8'd1;
     assign crypt_type  = rec[8*5 +: 2];
     assign nand_count  = rec[8*6 +: 5];
-    assign nand_big    = rec[8*7 +: 8] == 8'd1;
+    assign nand_big    = rec[8*7];
+    assign in1_layout  = rec[8*7+4 +: 4];
     assign data_xor    = rec[8*8 +: 16];
     assign exio_ident  = rec[8*26 +: 8];
     assign nl_table    = rec[8*27];
     assign light_gun   = rec[8*27 + 1];
     assign cdrom       = rec[8*27 + 2];
     assign exio_mcu    = rec[8*27 + 3];
+    assign exio_analog = rec[8*27 + 4];
+    assign memp3       = rec[8*27 + 5];
     assign save_base   = rec[8*28 +: 28];
-    assign nl_bits     = rec[8*460 +: 21];
-    assign t2_emask    = rec[8*32  +: 1024];
-    assign t2_dmask    = rec[8*160 +: 1024];
-    assign t2_xmask    = rec[8*288 +: 16];
-    assign t2_iv       = rec[8*296 +: 1024];
-    assign t2_nl_ac    = rec[8*424 +: 64];
-    assign t2_nl_ap    = rec[8*432 +: 64];
-    assign t2_nl_bc    = rec[8*440 +: 64];
-    assign t2_nl_bp    = rec[8*448 +: 64];
-    assign t2_nl_out   = rec[8*456 +: 16];
+    assign nl_bits     = nlb[20:0];
+
+    // record word (16 bit, byte offset a) -> mask RAM row / lane (lanes 0-3 C mask, 4-7 P mask)
+    function automatic [9:0] t2_map(input [9:0] a);   // {valid, row[5:0], lane[2:0]}
+        logic [9:0] w;
+        logic [9:0] o;
+        if (a >= 10'd32 && a < 10'd160) begin w = (a - 10'd32) >> 1;  t2_map = {1'b1, 2'b00, w[5:2], 1'b0, w[1:0]}; end
+        else if (a >= 10'd160 && a < 10'd288) begin w = (a - 10'd160) >> 1; t2_map = {1'b1, 2'b00, w[5:2], 1'b1, w[1:0]}; end
+        else if (a >= 10'd296 && a < 10'd424) begin w = (a - 10'd296) >> 1; t2_map = {1'b1, 2'b10, w[5:2], 1'b0, w[1:0]}; end
+        else if (a >= 10'd424 && a < 10'd456) begin
+            w = (a - 10'd424) >> 1;                 // fields ac, ap, bc, bp: row 16 (A) / 17 (B)
+            t2_map = {1'b1, 5'b01000, w[3], w[2], w[1:0]};
+        end else if (a >= 10'd464 && a < 10'd688) begin
+            o = a - 10'd464;                        // term t = 1 + o / 32
+            w = o[4:0] >> 1;
+            t2_map = {1'b1, 2'b01, 3'(o[7:5] + 3'd1), w[3], w[2], w[1:0]};
+        end else t2_map = 10'd0;
+    endfunction
+    wire [9:0] t2m = t2_map(ioctl_addr[9:0]);
     // record bytes 10..25: MAME bitswap<16> arguments in order (source bit of output bit 15, ..., of bit 0)
     always @* for (int i = 0; i < 16; i++) perm[4*i +: 4] = rec[8*(10 + 15 - i) +: 4];
 
@@ -136,6 +157,7 @@ module s10_loader #(
 
     always @(posedge clk) begin
         dl_req     <= 1'b0;
+        t2_row_we  <= 1'b0;
         fill_start <= 1'b0;
         dl_q       <= ioctl_download;
 
@@ -176,9 +198,18 @@ module s10_loader #(
 
         if (ioctl_download && ioctl_wr) begin
             // ---- board record
-            // the record arrives in order, one 16-bit word per ioctl_wr: shift it in (byte 0 ends at the
-            // bottom after RECB/2 words) instead of a byte-addressed write (a 464-way decoder)
-            if (rec_dl && ioctl_addr < RECB) rec <= {ioctl_dout, rec[8*RECB-1:16]};
+            if (rec_dl && ioctl_addr < 32) rec[8*ioctl_addr[4:0] +: 16] <= ioctl_dout;
+            if (rec_dl && ioctl_addr == 288) t2_xmask  <= ioctl_dout;
+            if (rec_dl && ioctl_addr == 456) t2_nl_out <= ioctl_dout;
+            if (rec_dl && ioctl_addr == 458) t2_nterms <= ioctl_dout[2:0];
+            if (rec_dl && ioctl_addr == 460) nlb[15:0]  <= ioctl_dout;
+            if (rec_dl && ioctl_addr == 462) nlb[31:16] <= ioctl_dout;
+            if (rec_dl && ioctl_addr < RECB && t2m[9]) begin
+                t2_row_we   <= 1'b1;
+                t2_row_addr <= t2m[8:3];
+                t2_row_lane <= t2m[2:0];
+                t2_row_data <= ioctl_dout;
+            end
 
             // ---- BIOS
             if (bios_dl) begin

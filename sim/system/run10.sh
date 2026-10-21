@@ -59,7 +59,7 @@ PY
   analyze psx "${LIBFILES[@]}" "${files[@]}" "$RTL/s10_ch3.vhd"
   analyze tb "$HERE/globals.vhd" "$HERE/sdram_model_s12.vhd" "$HERE/ddrram_model.vhd" "$HERE/framebuffer.vhd"
   # the SystemVerilog board modules go into the testbench library (VHDL component default binding)
-  "$NVC" --work="tb:$WDW/tb" -L "$WDW" -a "$RTL/s10_crypt_t1.sv" "$RTL/s10_crypt_t2.sv" "$RTL/s10_io.sv" "$RTL/s10_mem.sv" "$RTL/s10_loader.sv"
+  "$NVC" --work="tb:$WDW/tb" -L "$WDW" -a "$RTL/s10_crypt_t1.sv" "$RTL/s10_crypt_t2.sv" "$RTL/s10_crypt_t2s.sv" "$RTL/s10_io.sv" "$RTL/s10_exio.sv" "$RTL/s10_mem.sv" "$RTL/s10_loader.sv"
   python "$HERE/gen_tb10.py"
   "$NVC" $NVCF --work="tb:$WDW/tb" -L "$WDW" -a --relaxed "$HERE/tb_s10.vhd"
   "$NVC" $NVCF $NVC_MEM --work="tb:$WDW/tb" -L "$WDW" -e tb_s10 -gFB_EVERY="${FB_EVERY:-1}"

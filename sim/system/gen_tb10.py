@@ -18,7 +18,7 @@ for m in re.finditer(r"^\s+([A-Za-z0-9_]+)\s*:\s*(in|out|buffer|inout)\s+([^;:=]
 CONN = {
     "clk1x": "clk1x", "clk2x": "clk2x", "clk3x": "clk3x", "clkvid": "clkvid",
     "reset": "psx_reset", "pause": "'0'", "hps_busy": "'0'", "fastboot": "'0'", "ram8mb": "'1'",
-    "TURBO_MEM": "'0'", "TURBO_COMP": "'0'", "TURBO_CACHE": "'0'", "TURBO_CACHE50": "'0'", "interlaced480pHack": "'0'",
+    "TURBO_MEM": "'1'", "TURBO_COMP": "'1'", "TURBO_CACHE": "'1'", "TURBO_CACHE50": "'1'", "interlaced480pHack": "'0'",
     "biosregion": '"01"', "region": '"01"', "videoout_on": "'1'",
     "ram_refresh": "ram_refresh", "ram_dataWrite": "ram_dataWrite", "ram_dataRead32": "ram_dataRead32",
     "ram_Adr": "ram_Adr", "ram_cntDMA": "ram_cntDMA", "ram_be": "ram_be", "ram_rnw": "ram_rnw",
@@ -41,7 +41,7 @@ CONN = {
     "s10_irq10": "s10_irq10", "s10_exio": "s10_exio_on", "s10_ddr_request": "s10_ddr_request", "s10_ddr_ack": "s10_ddr_ack",
     "s10_ddr_burstcnt": "s10_ddr_burstcnt", "s10_ddr_addr": "s10_ddr_addr", "s10_ddr_din": "s10_ddr_din",
     "s10_ddr_be": "s10_ddr_be", "s10_ddr_we": "s10_ddr_we", "s10_ddr_rd": "s10_ddr_rd",
-    "s12_rdma_start": "rdma_start", "s12_rdma_valid": "rdma_valid", "s12_rdma_pop": "rdma_pop",
+    "s12_rdma_start": "rdma_start", "s12_rdma_valid": "rdma_valid", "s12_rdma_pop": "rdma_pop", "s12_rdma_want": "rdma_want",
     "s12_rdma_data": "rdma_data",
     "savestate_number": "0", "SPUon": "'1'",
 }

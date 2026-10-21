@@ -31,6 +31,7 @@ board type, descrambler permutation and XOR, decrypter parameters, nvram window.
 | --- | --- | --- |
 | `sim/crypt` | ModelSim | `s10_crypt_t1/t2` against every cipher/plain word pair MAME produces (`sim/crypt/README.md`) |
 | `sim/board` | NVC | `s10_mem` (+ loader) replaying every MEM-board access MAME makes (`local/mame/boardcap.lua`), each read compared |
+| `sim/p3` | NVC | `s10_p3` + `s10_ddr_mux` + `s10_p3audio`: MAME MCU RAM dump, the game's commands, stream match and audio from a `--test-tones` `.p3a` |
 | `sim/system` | NVC | the whole core except the MiSTer framework: psx_mister + System 10 board on preloaded SDRAM/DDR3 images; video frames (`gra2png.py`), PC trace, GP1 log, board-bus log |
 
 ```

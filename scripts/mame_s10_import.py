@@ -12,7 +12,7 @@ import re, sys
 
 
 def body(src, name):
-    m = re.search(r"void namcos10_memn_state::%s\(machine_config &config\)\n\{(.*?)\n\}\n" % re.escape(name), src, re.S)
+    m = re.search(r"void namcos10_mem(?:n|p3)_state::%s\(machine_config &config\)\n\{(.*?)\n\}\n" % re.escape(name), src, re.S)
     return m.group(1) if m else None
 
 

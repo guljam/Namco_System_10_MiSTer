@@ -14,7 +14,7 @@ use std.textio.all;
 library tb;
 
 entity tb_board is
-   generic (
+   generic (OLDDMA : integer := 0; 
       CAP_IMG : string := "capture.bin";
       DDR_IMG : string := "ddr.bin";
       REC_IMG : string := "record.bin";
@@ -31,17 +31,16 @@ architecture sim of tb_board is
          nand_count : in std_logic_vector(4 downto 0); nand_big : in std_logic;
          data_xor : in std_logic_vector(15 downto 0); perm : in std_logic_vector(63 downto 0);
          img_base : in std_logic_vector(27 downto 0); save_base : in std_logic_vector(27 downto 0);
-         t2_emask : in std_logic_vector(1023 downto 0); t2_dmask : in std_logic_vector(1023 downto 0);
-         t2_xmask : in std_logic_vector(15 downto 0); t2_iv : in std_logic_vector(1023 downto 0);
-         t2_nl_ac : in std_logic_vector(63 downto 0); t2_nl_ap : in std_logic_vector(63 downto 0);
-         t2_nl_bc : in std_logic_vector(63 downto 0); t2_nl_bp : in std_logic_vector(63 downto 0);
-         t2_nl_out : in std_logic_vector(15 downto 0);
+         t2_row_we : in std_logic; t2_row_addr : in std_logic_vector(5 downto 0);
+         t2_row_lane : in std_logic_vector(2 downto 0); t2_row_data : in std_logic_vector(15 downto 0);
+         t2_xmask : in std_logic_vector(15 downto 0); t2_nl_out : in std_logic_vector(15 downto 0);
+         t2_nterms : in std_logic_vector(2 downto 0);
          t2_nl_table : in std_logic; t2_nl_bits : in std_logic_vector(20 downto 0);
          nl_off : in std_logic_vector(27 downto 0);
          addr : in std_logic_vector(23 downto 0); wdata : in std_logic_vector(31 downto 0);
          wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0); stall : out std_logic;
-         rdma_start : in std_logic; rdma_valid : out std_logic; rdma_pop : in std_logic;
+         rdma_start : in std_logic; rdma_valid : out std_logic; rdma_pop : in std_logic; rdma_want : in std_logic;
          rdma_data : out std_logic_vector(31 downto 0);
          sram_req : out std_logic; sram_addr : out std_logic_vector(19 downto 0); sram_rnw : out std_logic;
          sram_be : out std_logic_vector(3 downto 0); sram_wdata : out std_logic_vector(31 downto 0);
@@ -65,12 +64,11 @@ architecture sim of tb_board is
          nand_count : out std_logic_vector(4 downto 0); nand_big : out std_logic;
          data_xor : out std_logic_vector(15 downto 0); perm : out std_logic_vector(63 downto 0);
          exio_ident : out std_logic_vector(7 downto 0); save_base : out std_logic_vector(27 downto 0);
-         t2_emask : out std_logic_vector(1023 downto 0); t2_dmask : out std_logic_vector(1023 downto 0);
-         t2_xmask : out std_logic_vector(15 downto 0); t2_iv : out std_logic_vector(1023 downto 0);
-         t2_nl_ac : out std_logic_vector(63 downto 0); t2_nl_ap : out std_logic_vector(63 downto 0);
-         t2_nl_bc : out std_logic_vector(63 downto 0); t2_nl_bp : out std_logic_vector(63 downto 0);
-         t2_nl_out : out std_logic_vector(15 downto 0); record_ok : out std_logic;
-         nl_table : out std_logic; light_gun : out std_logic; cdrom : out std_logic; exio_mcu : out std_logic;
+         t2_row_we : out std_logic; t2_row_addr : out std_logic_vector(5 downto 0);
+         t2_row_lane : out std_logic_vector(2 downto 0); t2_row_data : out std_logic_vector(15 downto 0);
+         t2_xmask : out std_logic_vector(15 downto 0); t2_nl_out : out std_logic_vector(15 downto 0);
+         t2_nterms : out std_logic_vector(2 downto 0); record_ok : out std_logic;
+         nl_table : out std_logic; light_gun : out std_logic; cdrom : out std_logic; exio_mcu : out std_logic; exio_analog : out std_logic; memp3 : out std_logic; in1_layout : out std_logic_vector(3 downto 0);
          nl_bits : out std_logic_vector(20 downto 0);
          dl_req : out std_logic; dl_addr : out std_logic_vector(26 downto 0); dl_data : out std_logic_vector(31 downto 0);
          dl_done : in std_logic; fill_start : out std_logic; fill_base : out std_logic_vector(26 downto 0);
@@ -121,14 +119,24 @@ architecture sim of tb_board is
    signal b_crypt : std_logic_vector(1 downto 0);
    signal b_nand_count : std_logic_vector(4 downto 0);
    signal b_data_xor, b_t2_xmask, b_t2_nl_out : std_logic_vector(15 downto 0);
-   signal b_perm, b_t2_nl_ac, b_t2_nl_ap, b_t2_nl_bc, b_t2_nl_bp : std_logic_vector(63 downto 0);
+   signal b_perm : std_logic_vector(63 downto 0);
+   signal b_t2_row_we : std_logic;
+   signal b_t2_row_addr : std_logic_vector(5 downto 0);
+   signal b_t2_row_lane, b_t2_nterms : std_logic_vector(2 downto 0);
+   signal b_t2_row_data : std_logic_vector(15 downto 0);
    signal b_exio : std_logic_vector(7 downto 0);
    signal b_nl_table, b_light_gun : std_logic;
    signal b_nl_bits : std_logic_vector(20 downto 0);
    signal b_save_base : std_logic_vector(27 downto 0);
-   signal b_t2_emask, b_t2_dmask, b_t2_iv : std_logic_vector(1023 downto 0);
 
+   signal rdma_start, rdma_pop, rdma_want : std_logic := '0';
+   signal rdma_want_dut : std_logic;
+   signal rdma_valid : std_logic;
+   signal rdma_data  : std_logic_vector(31 downto 0);
 begin
+   -- OLDDMA=1: the device may read ahead at any time (behaviour before the rdma_want fix)
+   rdma_want_dut <= '1' when OLDDMA = 1 else rdma_want;
+
    clk1x <= not clk1x after 14763 ps;
    clk2x <= not clk2x after 7381.5 ps;
 
@@ -136,14 +144,13 @@ begin
       port map (
          clk => clk1x, clk2 => clk2x, reset => reset,
          board_memn => b_memn, crypt_type => b_crypt, nand_count => b_nand_count, nand_big => b_nand_big,
-         data_xor => b_data_xor, perm => b_perm, img_base => x"2000000", save_base => b_save_base,
-         t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
-         t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
-         t2_nl_out => b_t2_nl_out,
-         t2_nl_table => b_nl_table, t2_nl_bits => b_nl_bits, nl_off => x"6400000",
+         data_xor => b_data_xor, perm => b_perm, img_base => x"0800000", save_base => b_save_base,
+         t2_row_we => b_t2_row_we, t2_row_addr => b_t2_row_addr, t2_row_lane => b_t2_row_lane,
+         t2_row_data => b_t2_row_data, t2_xmask => b_t2_xmask, t2_nl_out => b_t2_nl_out, t2_nterms => b_t2_nterms,
+         t2_nl_table => b_nl_table, t2_nl_bits => b_nl_bits, nl_off => x"F000000",
          addr => addr, wdata => wdata, wmask => wmask, size => size, rd => rd, wr => wr,
          rdata => rdata, stall => stall,
-         rdma_start => '0', rdma_valid => open, rdma_pop => '0', rdma_data => open,
+         rdma_start => rdma_start, rdma_valid => rdma_valid, rdma_pop => rdma_pop, rdma_want => rdma_want_dut, rdma_data => rdma_data,
          sram_req => sram_req, sram_addr => sram_addr, sram_rnw => sram_rnw, sram_be => sram_be,
          sram_wdata => sram_wdata, sram_rdata => sram_rdata, sram_ready => sram_ready,
          up_active => '0', up_rd => '0', up_addr => (others => '0'), up_din => open, up_wait => open, save_req => open,
@@ -179,7 +186,7 @@ begin
    end process;
 
    iddr : entity tb.ddrram_model
-      generic map (SLOWTIMING => 0, RANDOMTIMING => '0', LOGVRAM => '0', INITFILE => DDR_IMG, INITOFFSET => 16#2000000#)
+      generic map (SLOWTIMING => 0, RANDOMTIMING => '0', LOGVRAM => '0', INITFILE => DDR_IMG, INITOFFSET => 16#0800000#)
       port map (
          DDRAM_CLK => clk2x, DDRAM_BUSY => DDRAM_BUSY, DDRAM_BURSTCNT => DDRAM_BURSTCNT, DDRAM_ADDR => DDRAM_ADDR,
          DDRAM_DOUT => DDRAM_DOUT, DDRAM_DOUT_READY => DDRAM_DOUT_READY, DDRAM_RD => DDRAM_RD,
@@ -240,10 +247,9 @@ begin
          ioctl_addr => ioctl_addr, ioctl_dout => ioctl_dout, ioctl_wait => open,
          board_memn => b_memn, crypt_type => b_crypt, nand_count => b_nand_count, nand_big => b_nand_big,
          data_xor => b_data_xor, perm => b_perm, exio_ident => b_exio, save_base => b_save_base,
-         t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
-         t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
-         t2_nl_out => b_t2_nl_out, record_ok => b_record_ok,
-         nl_table => b_nl_table, light_gun => b_light_gun, cdrom => open, exio_mcu => open, nl_bits => b_nl_bits,
+         t2_row_we => b_t2_row_we, t2_row_addr => b_t2_row_addr, t2_row_lane => b_t2_row_lane,
+         t2_row_data => b_t2_row_data, t2_xmask => b_t2_xmask, t2_nl_out => b_t2_nl_out, t2_nterms => b_t2_nterms, record_ok => b_record_ok,
+         nl_table => b_nl_table, light_gun => b_light_gun, cdrom => open, exio_mcu => open, exio_analog => open, memp3 => open, in1_layout => open, nl_bits => b_nl_bits,
          dl_req => open, dl_addr => open, dl_data => open, dl_done => '0',
          fill_start => open, fill_base => open, fill_words => open, fill_value => open, fill_busy => '0',
          ddr_own => open, ddr_we => open, ddr_addr => open, ddr_din => open, ddr_be => open, ddr_busy => '0'
@@ -262,6 +268,7 @@ begin
       variable l : line;
       variable c0, c1 : character;
       variable ra : integer := 0;
+      variable dmaw, dmawords : integer := 0;
 
       procedure get32(variable v : out std_logic_vector(31 downto 0)) is
          variable ch : character;
@@ -288,10 +295,7 @@ begin
       ioctl_download <= '0';
       for i in 0 to 9 loop wait until rising_edge(clk1x); end loop;
       assert b_record_ok = '1' report "record not accepted" severity failure;
-      hwrite(l, b_t2_emask); writeline(output, l);
-      hwrite(l, b_t2_dmask); writeline(output, l);
-      hwrite(l, b_t2_iv); writeline(output, l);
-      hwrite(l, b_t2_nl_ac); write(l, string'(" ")); hwrite(l, b_t2_nl_bc); write(l, string'(" ")); hwrite(l, b_t2_nl_out);
+      hwrite(l, b_t2_nl_out);
       write(l, string'(" xor ")); hwrite(l, b_data_xor); write(l, string'(" perm ")); hwrite(l, b_perm); writeline(output, l);
       if MAXERR < 0 then std.env.finish; end if;
       reset <= '0';
@@ -304,7 +308,36 @@ begin
          get32(a); get32(d); get32(mk);
          for b in 0 to 3 loop lanes(b) := mk(8*b); end loop;
          n := n + 1;
-         if ty = 0 then
+         if ty = 2 then
+            -- channel-5 DMA (MEM(N) NAND -> RAM): words compared with the data MAME's transfer left in RAM
+            rdma_start <= '1'; wait until rising_edge(clk1x); rdma_start <= '0';
+            rdma_want  <= '1';
+            dmaw := to_integer(unsigned(d));
+            for w in 0 to dmaw - 1 loop
+               read(f, c); get32(a); get32(d); get32(mk);
+               n := n + 1;
+               waitc := 0;
+               loop
+                  wait until rising_edge(clk1x);
+                  exit when rdma_valid = '1';
+                  waitc := waitc + 1;
+                  assert waitc < 100000 report "DMA word never arrives" severity failure;
+               end loop;
+               if w = dmaw - 1 then rdma_want <= '0'; end if;   -- the DMA stops wanting with its last word
+               rdma_pop <= '1'; wait until rising_edge(clk1x); rdma_pop <= '0';
+               dmawords := dmawords + 1;
+               if rdma_data /= d then
+                  errs := errs + 1;
+                  if errs <= MAXERR then
+                     write(l, string'("DMA MISMATCH #")); write(l, n); write(l, string'(" RAM "));
+                     hwrite(l, a); write(l, string'(" MAME ")); hwrite(l, d); write(l, string'(" core ")); hwrite(l, rdma_data);
+                     writeline(output, l);
+                  end if;
+               end if;
+            end loop;
+            rdma_want <= '0';
+            for i in 0 to 7 loop wait until rising_edge(clk1x); end loop;
+         elsif ty = 0 then
             addr  <= a(23 downto 2) & "00";
             wdata <= d;
             wmask <= lanes;
@@ -353,6 +386,7 @@ begin
       end loop;
       write(l, string'("DONE records ")); write(l, n); write(l, string'(" reads ")); write(l, reads);
       write(l, string'(" erase-busy polls (timing) ")); write(l, skew);
+      write(l, string'(" dma words ")); write(l, dmawords);
       write(l, string'(" errors ")); write(l, errs); writeline(output, l);
       if errs = 0 then report "PASS"; else report "FAIL" severity error; end if;
       std.env.finish;

@@ -46,6 +46,17 @@ architecture sim of tb_s10 is
       );
    end component;
 
+   component s10_exio is
+      port (
+         clk : in std_logic; reset : in std_logic; enable : in std_logic;
+         addr : in std_logic_vector(23 downto 0); wdata : in std_logic_vector(31 downto 0);
+         wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
+         rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0);
+         drum : in std_logic_vector(7 downto 0); analog_en : in std_logic;
+         analog : in std_logic_vector(79 downto 0)
+      );
+   end component;
+
    component s10_mem is
       port (
          clk : in std_logic; clk2 : in std_logic; reset : in std_logic;
@@ -53,17 +64,16 @@ architecture sim of tb_s10 is
          nand_count : in std_logic_vector(4 downto 0); nand_big : in std_logic;
          data_xor : in std_logic_vector(15 downto 0); perm : in std_logic_vector(63 downto 0);
          img_base : in std_logic_vector(27 downto 0); save_base : in std_logic_vector(27 downto 0);
-         t2_emask : in std_logic_vector(1023 downto 0); t2_dmask : in std_logic_vector(1023 downto 0);
-         t2_xmask : in std_logic_vector(15 downto 0); t2_iv : in std_logic_vector(1023 downto 0);
-         t2_nl_ac : in std_logic_vector(63 downto 0); t2_nl_ap : in std_logic_vector(63 downto 0);
-         t2_nl_bc : in std_logic_vector(63 downto 0); t2_nl_bp : in std_logic_vector(63 downto 0);
-         t2_nl_out : in std_logic_vector(15 downto 0);
+         t2_row_we : in std_logic; t2_row_addr : in std_logic_vector(5 downto 0);
+         t2_row_lane : in std_logic_vector(2 downto 0); t2_row_data : in std_logic_vector(15 downto 0);
+         t2_xmask : in std_logic_vector(15 downto 0); t2_nl_out : in std_logic_vector(15 downto 0);
+         t2_nterms : in std_logic_vector(2 downto 0);
          t2_nl_table : in std_logic; t2_nl_bits : in std_logic_vector(20 downto 0);
          nl_off : in std_logic_vector(27 downto 0);
          addr : in std_logic_vector(23 downto 0); wdata : in std_logic_vector(31 downto 0);
          wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0); stall : out std_logic;
-         rdma_start : in std_logic; rdma_valid : out std_logic; rdma_pop : in std_logic;
+         rdma_start : in std_logic; rdma_valid : out std_logic; rdma_pop : in std_logic; rdma_want : in std_logic;
          rdma_data : out std_logic_vector(31 downto 0);
          sram_req : out std_logic; sram_addr : out std_logic_vector(19 downto 0); sram_rnw : out std_logic;
          sram_be : out std_logic_vector(3 downto 0); sram_wdata : out std_logic_vector(31 downto 0);
@@ -87,12 +97,11 @@ architecture sim of tb_s10 is
          nand_count : out std_logic_vector(4 downto 0); nand_big : out std_logic;
          data_xor : out std_logic_vector(15 downto 0); perm : out std_logic_vector(63 downto 0);
          exio_ident : out std_logic_vector(7 downto 0); save_base : out std_logic_vector(27 downto 0);
-         t2_emask : out std_logic_vector(1023 downto 0); t2_dmask : out std_logic_vector(1023 downto 0);
-         t2_xmask : out std_logic_vector(15 downto 0); t2_iv : out std_logic_vector(1023 downto 0);
-         t2_nl_ac : out std_logic_vector(63 downto 0); t2_nl_ap : out std_logic_vector(63 downto 0);
-         t2_nl_bc : out std_logic_vector(63 downto 0); t2_nl_bp : out std_logic_vector(63 downto 0);
-         t2_nl_out : out std_logic_vector(15 downto 0); record_ok : out std_logic;
-         nl_table : out std_logic; light_gun : out std_logic; cdrom : out std_logic; exio_mcu : out std_logic;
+         t2_row_we : out std_logic; t2_row_addr : out std_logic_vector(5 downto 0);
+         t2_row_lane : out std_logic_vector(2 downto 0); t2_row_data : out std_logic_vector(15 downto 0);
+         t2_xmask : out std_logic_vector(15 downto 0); t2_nl_out : out std_logic_vector(15 downto 0);
+         t2_nterms : out std_logic_vector(2 downto 0); record_ok : out std_logic;
+         nl_table : out std_logic; light_gun : out std_logic; cdrom : out std_logic; exio_mcu : out std_logic; exio_analog : out std_logic; memp3 : out std_logic; in1_layout : out std_logic_vector(3 downto 0);
          nl_bits : out std_logic_vector(20 downto 0);
          dl_req : out std_logic; dl_addr : out std_logic_vector(26 downto 0); dl_data : out std_logic_vector(31 downto 0);
          dl_done : in std_logic; fill_start : out std_logic; fill_base : out std_logic_vector(26 downto 0);
@@ -157,7 +166,7 @@ architecture sim of tb_s10 is
    signal s10_ddr_burstcnt, s10_ddr_be : std_logic_vector(7 downto 0);
    signal s10_ddr_addr : std_logic_vector(27 downto 0);
    signal s10_ddr_din  : std_logic_vector(63 downto 0);
-   signal rdma_start, rdma_valid, rdma_pop : std_logic;
+   signal rdma_start, rdma_valid, rdma_pop, rdma_want : std_logic;
    signal rdma_data : std_logic_vector(31 downto 0);
    signal sram_req, sram_rnw, sram_ready : std_logic;
    signal sram_addr  : std_logic_vector(19 downto 0);
@@ -179,12 +188,18 @@ architecture sim of tb_s10 is
    signal b_crypt : std_logic_vector(1 downto 0);
    signal b_nand_count : std_logic_vector(4 downto 0);
    signal b_data_xor, b_t2_xmask, b_t2_nl_out : std_logic_vector(15 downto 0);
-   signal b_nl_table, b_light_gun, s10_exio_on : std_logic;
+   signal b_nl_table, b_light_gun, s10_exio_on, b_exio_mcu, b_exio_analog : std_logic;
+   -- analog sticks centred (0x200 per channel)
+   signal exio_adc : std_logic_vector(79 downto 0) := (x"80200802008020080200");
+   signal exio_rdata : std_logic_vector(31 downto 0);
    signal b_nl_bits : std_logic_vector(20 downto 0);
-   signal b_perm, b_t2_nl_ac, b_t2_nl_ap, b_t2_nl_bc, b_t2_nl_bp : std_logic_vector(63 downto 0);
+   signal b_perm : std_logic_vector(63 downto 0);
+   signal b_t2_row_we : std_logic;
+   signal b_t2_row_addr : std_logic_vector(5 downto 0);
+   signal b_t2_row_lane, b_t2_nterms : std_logic_vector(2 downto 0);
+   signal b_t2_row_data : std_logic_vector(15 downto 0);
    signal b_exio : std_logic_vector(7 downto 0);
    signal b_save_base : std_logic_vector(27 downto 0);
-   signal b_t2_emask, b_t2_dmask, b_t2_iv : std_logic_vector(1023 downto 0);
 
    signal tb_in1 : std_logic_vector(31 downto 0) := (others => '1');
    signal exe_dummy : unsigned(31 downto 0);
@@ -241,7 +256,12 @@ begin
 @@PSX_PORTMAP@@
       );
 
-   s10_rdata <= io_rdata or mem_rdata;
+   s10_rdata <= io_rdata or mem_rdata or exio_rdata;
+
+   iexio : s10_exio
+      port map (clk => clk1x, reset => psx_reset, enable => b_exio_mcu, addr => s10_addr, wdata => s10_wdata,
+                wmask => s10_wmask, size => s10_size, rd => s10_rd, wr => s10_wr, rdata => exio_rdata, drum => x"00",
+                analog_en => b_exio_analog, analog => exio_adc);
    s10_exio_on <= '1' when b_exio /= x"FF" else '0';
 
    iio : s10_io
@@ -258,14 +278,13 @@ begin
       port map (
          clk => clk1x, clk2 => clk2x, reset => psx_reset,
          board_memn => b_memn, crypt_type => b_crypt, nand_count => b_nand_count, nand_big => b_nand_big,
-         data_xor => b_data_xor, perm => b_perm, img_base => x"2000000", save_base => b_save_base,
-         t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
-         t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
-         t2_nl_out => b_t2_nl_out,
-         t2_nl_table => b_nl_table, t2_nl_bits => b_nl_bits, nl_off => x"6400000",
+         data_xor => b_data_xor, perm => b_perm, img_base => x"0800000", save_base => b_save_base,
+         t2_row_we => b_t2_row_we, t2_row_addr => b_t2_row_addr, t2_row_lane => b_t2_row_lane,
+         t2_row_data => b_t2_row_data, t2_xmask => b_t2_xmask, t2_nl_out => b_t2_nl_out, t2_nterms => b_t2_nterms,
+         t2_nl_table => b_nl_table, t2_nl_bits => b_nl_bits, nl_off => x"F000000",
          addr => s10_addr, wdata => s10_wdata, wmask => s10_wmask, size => s10_size,
          rd => s10_rd, wr => s10_wr, rdata => mem_rdata, stall => s10_stall,
-         rdma_start => rdma_start, rdma_valid => rdma_valid, rdma_pop => rdma_pop, rdma_data => rdma_data,
+         rdma_start => rdma_start, rdma_valid => rdma_valid, rdma_pop => rdma_pop, rdma_want => rdma_want,rdma_data => rdma_data,
          sram_req => sram_req, sram_addr => sram_addr, sram_rnw => sram_rnw, sram_be => sram_be,
          sram_wdata => sram_wdata, sram_rdata => sram_rdata, sram_ready => sram_ready,
          up_active => '0', up_rd => '0', up_addr => (others => '0'), up_din => open, up_wait => open, save_req => open,
@@ -281,10 +300,9 @@ begin
          ioctl_addr => ioctl_addr, ioctl_dout => ioctl_dout, ioctl_wait => open,
          board_memn => b_memn, crypt_type => b_crypt, nand_count => b_nand_count, nand_big => b_nand_big,
          data_xor => b_data_xor, perm => b_perm, exio_ident => b_exio, save_base => b_save_base,
-         t2_emask => b_t2_emask, t2_dmask => b_t2_dmask, t2_xmask => b_t2_xmask, t2_iv => b_t2_iv,
-         t2_nl_ac => b_t2_nl_ac, t2_nl_ap => b_t2_nl_ap, t2_nl_bc => b_t2_nl_bc, t2_nl_bp => b_t2_nl_bp,
-         t2_nl_out => b_t2_nl_out, record_ok => b_record_ok,
-         nl_table => b_nl_table, light_gun => b_light_gun, cdrom => open, exio_mcu => open, nl_bits => b_nl_bits,
+         t2_row_we => b_t2_row_we, t2_row_addr => b_t2_row_addr, t2_row_lane => b_t2_row_lane,
+         t2_row_data => b_t2_row_data, t2_xmask => b_t2_xmask, t2_nl_out => b_t2_nl_out, t2_nterms => b_t2_nterms, record_ok => b_record_ok,
+         nl_table => b_nl_table, light_gun => b_light_gun, cdrom => open, exio_mcu => b_exio_mcu, exio_analog => b_exio_analog, memp3 => open, in1_layout => open, nl_bits => b_nl_bits,
          dl_req => open, dl_addr => open, dl_data => open, dl_done => '0',
          fill_start => open, fill_base => open, fill_words => open, fill_value => open, fill_busy => '0',
          ddr_own => open, ddr_we => open, ddr_addr => open, ddr_din => open, ddr_be => open, ddr_busy => '0'
@@ -344,7 +362,7 @@ begin
       );
 
    iddrram : entity tb.ddrram_model
-      generic map (SLOWTIMING => 0, RANDOMTIMING => '0', LOGVRAM => LOGVRAM, INITFILE => DDR_IMG, INITOFFSET => 16#2000000#)
+      generic map (SLOWTIMING => 0, RANDOMTIMING => '0', LOGVRAM => LOGVRAM, INITFILE => DDR_IMG, INITOFFSET => 16#0800000#)
       port map (
          DDRAM_CLK        => clk2x,
          DDRAM_BUSY       => DDRAM_BUSY,

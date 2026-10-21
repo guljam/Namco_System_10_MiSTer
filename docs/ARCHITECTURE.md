@@ -14,7 +14,7 @@ decrypts, sometimes an SRAM) and on optional expansion boards.
 
 | Part | System 10 | System 12 (Tenkomori core) |
 | --- | --- | --- |
-| CPU | CXD8606BQ/CQ (R3000A + GTE) at 33.8688 MHz (101.4912 / 3), **PlayStation speed** | CXD8661R at 50 MHz (core needs the System 12 cache/turbo) |
+| CPU | CXD8606BQ/CQ (R3000A + GTE) at 50.7456 MHz (101.4912 / 2), **1.5x PlayStation**; SPU CXD2938Q from 101.4912 / 2 (66.15 kHz) | CXD8661R at 50 MHz |
 | GPU | CXD8561CQ, 2 MB SGRAM, MAME `gputype 2` | CXD8654Q, 2 MB, `gputype 2` (**identical model**) |
 | Main RAM | 4 MB EDO | 4 MB |
 | Sound | **PlayStation SPU** (CXD2938Q / CXD2941R), 512 KB sound RAM | C352 driven by an H8/3002 |
@@ -32,7 +32,8 @@ Taken as the base repository layout (Quartus 17.0 project, `sys/`, build scripts
 
 * **PSX core** (`rtl/`, PSX_MiSTer via XelaNotPu's System 11 port): CPU, GTE, MDEC, DMA, timers, IRQ,
   the 2 MB-VRAM type-2 GPU with our sprite-flip / texture-page fixes and the data-cache coherence fix.
-  System 10 runs at PlayStation speed, so the **System 12 turbo/cache is switched off** (exact PS1 timing).
+  System 10 runs 1.5x faster than a PlayStation (MAME: CPU and SPU from 101.4912 MHz / 2), so the **System 12
+  turbo/cache modes stay on** (CPU), and the SPU takes 512 clk1x per sample (66.15 kHz).
 * **Video**: video_mixer path, Scandoubler Fx, the fixed blanking window, CRT Adjust (H-Size,
   H-Position, V-Shift), the loading-screen sync, `tkm_screen_rotate` + `ddram_rotate_arb` (rotation,
   512-entry FIFO, registered psx hold). All System 10 games are ROT0, so the default is Horizontal; the
@@ -137,12 +138,26 @@ reused.
 | 0x24000000-0x257FFFFF | rotation frame buffers (3 x 8 MB) |
 | 0x30000000-0x301FFFFF | PSX VRAM (2 MB) |
 | 0x30300000-0x3037FFFF | SPU RAM (psx_top arbiter client 3) |
-| **0x32000000-0x3DFFFFFF** | **MEM board images** (192 MB: flash/mask ROMs or up to 11 NANDs at 0x1080000 each); written by Main_MiSTer through MRA `address=` (fast loading), or by the core from the ioctl stream with older firmware |
-| 0x3E000000- | PSX savestates (unused) |
+| 0x30400000-0x307FFFFF | GPU frame buffers |
+| **0x30800000-0x3EFFFFFF** | **MEM board images** (232 MB: flash/mask ROMs or up to 14 NANDs at 0x1080000 each); written by Main_MiSTer through MRA `address=` (fast loading), or by the core from the ioctl stream with older firmware |
+| 0x3F000000-0x3F7FFFFF | MEM(P3) MCU RAM (8 MB, `s10_p3`) |
+| 0x3F800000- | type-2 nonlinear bit table (Point Blank 3) |
 
 DDR3 masters: `ddram_rotate_arb` (rotation writes + the psx master). Inside `psx_top`'s arbiter the
 psx master serves VRAM, SPU and the new **MEM board client** (page fetches, MEM(M) line reads with a
 small read cache, program/erase writes, nvram transfer).
+
+### 3.4a MEM(P3) MP3 board (`rtl/s10_p3.sv`, `rtl/s10_p3audio.sv`, `tools/p3audio.py`)
+
+Golgo 13, Nice Tsukkomi and Seishun Quiz: MEM(N) NANDs plus a TMP95C061 MCU with 8 MB SDRAM and a Sanyo LC82310
+MP3 decoder. The game uploads the MCU program and each MP3 into the SDRAM through a 128 KB banked window
+(0x1F320000, bank register 0x1F30000C) and writes commands at MCU 0xFE0000 (interrupt 0x1F300006). The core
+keeps the SDRAM in DDR3 (`s10_ddr_mux` shares `s10_mem`'s arbiter port) and replaces the MCU and decoder with a
+high-level stand-in: on `0050` (play) it reads the stream's {offset, length} from the table entry `004C` selected
+and CRC-32s 64 bytes at offsets 0, 0x2000 and 0x10000; `s10_p3audio` looks those keys up in the `.p3a` index on
+SD slot 0 and streams the pre-decoded PCM (44.1 kHz) at the `0056` volume. Golgo 13's rifle reads the MCU ADC
+copy at 0xFFFFF0, served from the gun input. `tools/p3audio.py` finds the MP3 files in the NAND data, decodes them
+and writes the index; `sim/p3` checks the RTL against MAME MCU RAM dumps.
 
 ### 3.5 SDRAM map (64 MB module)
 
@@ -162,8 +177,8 @@ MRA indexes:
 | --- | --- | --- |
 | 0 | BIOS part of flash / NAND0 | ioctl -> loader unscrambles -> SDRAM BIOS |
 | 1 | board record (64-byte header + crypto parameters) | ioctl -> registers / small BRAM |
-| 2 | MEM(M) flash, or all NANDs concatenated | MRA `address=0x32000000` -> DDR3 (fallback: ioctl -> DDR3 writer) |
-| 3 | MEM(M) data mask ROMs | MRA `address=0x32800000` -> DDR3 |
+| 2 | MEM(M) flash, or all NANDs concatenated | MRA `address=0x30800000` -> DDR3 (fallback: ioctl -> DDR3 writer) |
+| 3 | MEM(M) data mask ROMs | MRA `address=0x31000000` -> DDR3 |
 | 9 | nvram: a window of the DDR3 image (MEM(M) flash 0x40000, 64 KB; MEM(N) NAND0 block 1, 0x4200 bytes) | load: written into DDR3 by the loader while the PSX is in reset; save: uploaded from DDR3 by `s10_mem` |
 
 The core holds the PSX in reset until all indexes have arrived, then releases it (the Tenkomori
@@ -179,7 +194,7 @@ Little-endian, written by `scripts/romtool.py` from a per-game table that mirror
 | 4 | 1 | board type: 0 MEM(M), 1 MEM(N), 2 MEM(P3), 3 Taito |
 | 5 | 1 | decrypter: 0 none, 1 type 1, 2 type 2, 3 type 2 + nonlinear table |
 | 6 | 1 | NAND count / data ROM count |
-| 7 | 1 | NAND type (0 K9F2808U0B, 1 K9F5608U0D) |
+| 7 | 1 | bit 0: NAND type (0 K9F2808U0B, 1 K9F5608U0D); bits 7-4: IN1 layout (0 standard, 1 Golgo 13, 2 Nice Tsukkomi, 3 Seishun Quiz) |
 | 8 | 2 | data XOR (0xAAAA) |
 | 10 | 16 | unscramble permutation: source bit for each output bit 15..0 |
 | 26 | 1 | EXIO ident (0xFF none) |

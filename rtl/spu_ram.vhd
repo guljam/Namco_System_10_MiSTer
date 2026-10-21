@@ -162,23 +162,24 @@ begin
       q_b         => open
    );   
    
--- reverb ram  64kbyte -> should cover most use cases, fallback is direct memory access
-   ram_ReverbSpace <= '1' when (ram_Adr(18 downto 16) = "111") else '0';
+-- reverb ram 128kbyte (System 10: 512 clk per sample leaves no time for DDR3 reverb accesses; Mr. Driller G's
+-- reverb work area starts at 0x67FC0), fallback is direct memory access
+   ram_ReverbSpace <= '1' when (ram_Adr(18 downto 17) = "11") else '0';
 
    reverbram_we <= '1' when (ram_request = '1' and ram_rnw = '0' and ram_ReverbSpace = '1') else '0';
 
    iram_reverb: entity mem.dpram
-   generic map (addr_width => 15, data_width => 16)
+   generic map (addr_width => 16, data_width => 16)
    port map
    (
       clock_a     => clk1x,
-      address_a   => ram_Adr(15 downto 1),
+      address_a   => ram_Adr(16 downto 1),
       data_a      => ram_dataWrite,
       wren_a      => reverbram_we,
       q_a         => reverbram_readdata,
       
       clock_b     => clk1x,
-      address_b   => (14 downto 0 => '0'),
+      address_b   => (15 downto 0 => '0'),
       data_b      => x"0000",
       wren_b      => '0',
       q_b         => open

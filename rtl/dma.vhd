@@ -71,6 +71,7 @@ entity dma is
       DMA_ROM_start        : out std_logic := '0';   -- pulse: channel 5 transfer begins (glue latches the source)
       DMA_ROM_valid        : in  std_logic := '0';   -- a ROM word is available on DMA_ROM_read
       DMA_ROM_readEna      : out std_logic := '0';   -- pop (word consumed this cycle)
+      DMA_ROM_want         : out std_logic := '0';   -- channel 5 still needs words from the device (System 10 NAND DMA)
       DMA_ROM_read         : in  std_logic_vector(31 downto 0) := (others => '0');
       
       spu_timing_on        : in  std_logic;
@@ -272,7 +273,9 @@ begin
 
    DMA_CD_readEna    <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 3 and toDevice = '0') else '0';
    
-   DMA_ROM_readEna   <= '1' when (ce = '1' and dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 5 and toDevice = '0' and wordAccu = 0 and DMA_ROM_valid = '1') else '0';
+   -- WORKING ends on the clock that takes the last word, so the device never reads ahead past the transfer
+   DMA_ROM_want      <= '1' when (dmaState = WORKING and activeChannel = 5 and toDevice = '0') else '0';
+   DMA_ROM_readEna   <= '1' when(ce = '1' and dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 5 and toDevice = '0' and wordAccu = 0 and DMA_ROM_valid = '1') else '0';
    
    DMA_SPU_readEna   <= '1' when (dmaState = WORKING and fifoOut_NearFull = '0' and activeChannel = 4 and toDevice = '0') else '0';
 

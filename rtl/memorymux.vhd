@@ -118,6 +118,7 @@ entity memorymux is
       bus_gpu_write        : out std_logic;
       bus_gpu_dataRead     : in  std_logic_vector(31 downto 0);
       bus_gpu_stall        : in  std_logic;
+      gpu_frame_busy       : in  std_logic := '0';   -- System 10: GPU still drawing / fed (GP1(01) waits, see BUSWRITE)
       
       bus_mdec_addr        : out unsigned(3 downto 0);
       bus_mdec_dataWrite   : out std_logic_vector(31 downto 0);
@@ -233,6 +234,13 @@ architecture arch of memorymux is
       EXECOPYWRITE
    );
    signal state                  : tState := IDLE;
+   -- System 10: a GP1(01) (reset command buffer) write waits while the GPU is still drawing the previous
+   -- frame. Gamshara / Kono e Tako send it at every vblank of their 480i single-buffer screens; on the board
+   -- the CXD8561CQ has always finished by then (SGRAM), the DDR3-based GPU sometimes not. Waiting here makes
+   -- the reset find an idle GPU as on the board (at worst a short slowdown) instead of cutting the frame
+   -- (flashing title logo) or letting the next frame's DMA start over the unfinished one (garbage, hangs).
+   signal gp1_hold               : std_logic;
+   signal gp1_holdcnt            : unsigned(19 downto 0) := (others => '0');   -- ~15 ms at clk1x: safety limit
    signal dbg_state_num          : integer range 0 to 31 := 0;  -- sim probe: tState'pos(state)
       
    signal mem_request            : std_logic;
@@ -407,7 +415,10 @@ begin
 
    isIdle <= '1' when (state = IDLE and readram = '0' and writeram = '0' and writeFifo_busy = '0' and mem_save_request = '0') else '0';
 
-   process (state, addressData_buf, writeMask_buf, dataWrite_buf, reqsize_buf)
+   gp1_hold <= '1' when (state = BUSWRITE and addressData_buf(28 downto 0) = 16#1F801814# and dataWrite_buf(29 downto 24) = "000001" and
+                         gpu_frame_busy = '1' and gp1_holdcnt /= x"7FFFF") else '0';
+
+   process (state, addressData_buf, writeMask_buf, dataWrite_buf, reqsize_buf, gp1_hold)
       variable address  : unsigned(28 downto 0);
       variable enableRead  : std_logic;
       variable enableWrite : std_logic;
@@ -420,7 +431,7 @@ begin
       if (state = BUSREADREQUEST) then 
          enableRead := '1';
       end if;
-      if (state = BUSWRITE) then 
+      if (state = BUSWRITE and gp1_hold = '0') then 
          enableWrite := '1';
       end if;
       
@@ -1249,7 +1260,12 @@ begin
                   end if;
 
                when BUSWRITE =>
-                  state        <= IDLE;
+                  if (gp1_hold = '1') then
+                     gp1_holdcnt <= gp1_holdcnt + 1;
+                  else
+                     gp1_holdcnt <= (others => '0');
+                     state       <= IDLE;
+                  end if;
 
                when BUSREAD_CDSTUB =>
                   mem_dataRead_buf <= x"FFFFFFFF";

@@ -31,8 +31,9 @@ for t, o, v, m, us in recs:
             if pk[0] in (0xBE, 0x28, 0xA8):
                 lba = struct.unpack(">I", bytes(pk[2:6]))[0]
                 n = (pk[6] << 16 | pk[7] << 8 | pk[8]) if pk[0] == 0xBE else (pk[7] << 8 | pk[8])
-                for k in range(n + 2): lbas.add(lba + k)        # + read-ahead
+                for k in range(n + 9): lbas.add(lba + k)        # + read-ahead window (8 sectors)
             pk = None
+lbas |= set(range(8))                                  # window at power-on
 blocks = {0}
 for l in lbas:
     a = l * ss + (16 if raw else 0)

@@ -7,7 +7,7 @@ library psx;
 library tb;
 
 entity tb_gpu is
-   generic (SLOWVRAM : integer := 0; LOADV : std_logic := '0'; LOGV : std_logic := '0');
+   generic (SLOWVRAM : integer := 0; LOADV : std_logic := '0'; LOGV : std_logic := '0'; READBACK : integer := 0; PROF : integer := 0);
 end entity;
 
 architecture sim of tb_gpu is
@@ -19,6 +19,8 @@ architecture sim of tb_gpu is
    signal bus_addr : unsigned(3 downto 0) := (others => '0');
    signal bus_dw   : std_logic_vector(31 downto 0) := (others => '0');
    signal bus_wr   : std_logic := '0';
+   signal bus_rd, bus_stall : std_logic := '0';
+   signal bus_dr   : std_logic_vector(31 downto 0);
    signal gpustat  : std_logic_vector(31 downto 0);
    signal DDRAM_BUSY, DDRAM_DOUT_READY, DDRAM_RD, DDRAM_WE : std_logic;
    signal DDRAM_DOUT, DDRAM_DIN : std_logic_vector(63 downto 0);
@@ -26,9 +28,10 @@ architecture sim of tb_gpu is
    signal DDRAM_ADDR : std_logic_vector(28 downto 0);
    signal vram_ADDR : std_logic_vector(27 downto 0);
    signal fed : std_logic := '0';
+   signal rb_go, rb_done, rb_addr : std_logic := '0';
    signal npix : integer := 0;
    type t_gp1 is array (natural range <>) of std_logic_vector(31 downto 0);
-   constant GP1INIT : t_gp1(0 to 2) := (x"08000027", x"06C8C28C", x"07040010");
+   constant GP1INIT : t_gp1(0 to 3) := (x"08000027", x"06C8C28C", x"07040010", x"05000000");
 begin
    clk1x  <= not clk1x  after 14763 ps;
    clk2x  <= not clk2x  after  7381.5 ps;
@@ -78,6 +81,69 @@ begin
       bus_addr <= x"4"; bus_dw <= x"04000002"; bus_wr <= '1';
       wait until rising_edge(clk1x);
       bus_wr <= '0';
+      bus_addr <= x"0";                  -- GPUREAD for the readback
+      wait;
+   end process;
+
+   -- profile (PROF=1): clk2x cycles per rect-drawer state and per pixel-pipeline state, reported at the end
+   gprof : if PROF = 1 generate
+      type t_cnt is array (0 to 15) of integer;
+      shared variable rc, pc, stall_tex : t_cnt;
+   begin
+      process
+         alias rs is << signal .tb_gpu.igpu.igpu_rect.prof_state : integer >>;
+         alias ps is << signal .tb_gpu.igpu.igpu_pixelpipeline.prof_state : integer >>;
+         alias pst is << signal .tb_gpu.igpu.igpu_pixelpipeline.pixelStall : std_logic >>;
+      begin
+         wait until rising_edge(clk2x);
+         if fed = '0' or gpustat(26) = '0' then
+            rc(rs) := rc(rs) + 1;
+            pc(ps) := pc(ps) + 1;
+            if pst = '1' then stall_tex(0) := stall_tex(0) + 1; end if;
+         end if;
+      end process;
+      process
+         variable l : line;
+      begin
+         wait until rb_go = '1' or fed = '1';
+         wait for 1 us;
+         loop
+            wait until rising_edge(clk1x);
+            exit when fed = '1' and gpustat(26) = '1' and gpustat(28) = '1';
+         end loop;
+         write(l, string'("PROF rect IDLE,POS,TEX,SIZE,CHECK,FIRST,REQLINE,READWAIT,PROCPIX,WAITTIM:"));
+         for i in 0 to 9 loop write(l, string'(" ")); write(l, rc(i)); end loop;
+         report l.all; deallocate(l);
+         write(l, string'("PROF pipe IDLE,MORETEX,REQTEX,WAITTEX,REQPAL,WAITPAL:"));
+         for i in 0 to 5 loop write(l, string'(" ")); write(l, pc(i)); end loop;
+         write(l, string'(" pixelStall ")); write(l, stall_tex(0));
+         report l.all; deallocate(l);
+         wait;
+      end process;
+   end generate;
+
+   -- GPUREAD readback (after the frame): one word per bus read, waiting out bus_stall
+   process
+      file fo : text;
+      variable lo : line;
+      variable k : integer := 0;
+   begin
+      wait until rb_go = '1';
+      file_open(fo, "readback.txt", write_mode);
+      report "readback: GPUSTAT " & to_hstring(gpustat);
+      while k < READBACK loop
+         wait until rising_edge(clk1x);
+         bus_rd <= '1';
+         wait until rising_edge(clk1x);
+         bus_rd <= '0';
+         wait until rising_edge(clk1x);
+         while bus_stall = '1' loop wait until rising_edge(clk1x); end loop;
+         hwrite(lo, bus_dr); writeline(fo, lo);
+         k := k + 1;
+      end loop;
+      file_close(fo);
+      report "readback " & integer'image(k) & " words";
+      rb_done <= '1';
       wait;
    end process;
 
@@ -113,6 +179,14 @@ begin
       dma_we <= '0'; dma_on <= '0';
       report "FED " & integer'image(n) & " words in " & time'image(now - t0);
       fed <= '1';
+      if READBACK > 0 then
+         -- the stream ends with a GP0 C0 (VRAM -> CPU): the GPU stays busy until its data is read
+         loop wait until rising_edge(clk1x); exit when gpustat(27) = '1'; end loop;
+         report "frame + readback request done in " & time'image(now - t0) & " pixels " & integer'image(npix);
+         rb_go <= '1';
+         wait until rb_done = '1';
+         std.env.stop;
+      end if;
       -- idle = ready for command (26) and ready for DMA block (28) for 2000 cycles
       loop
          for i in 1 to 2000 loop
@@ -122,6 +196,11 @@ begin
          exit when gpustat(26) = '1' and gpustat(28) = '1';
       end loop;
       report "DONE frame drawn in " & time'image(now - t0 - 2000 * 29526 ps) & " pixels " & integer'image(npix) severity note;
+      if READBACK > 0 then
+         -- the stream ends with a GP0 C0 (VRAM -> CPU); read READBACK words through GPUREAD
+         rb_go <= '1';
+         wait until rb_done = '1';
+      end if;
       std.env.stop;
       wait;
    end process;

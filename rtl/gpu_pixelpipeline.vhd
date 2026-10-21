@@ -51,6 +51,9 @@ entity gpu_pixelpipeline is
       requestVRAMXPos      : out unsigned(9 downto 0);
       requestVRAMYPos      : out unsigned(9 downto 0);
       requestVRAMSize      : out unsigned(10 downto 0);
+      requestVRAMRows      : out unsigned(1 downto 0);   -- texture misses: further rows read after the first (same X / size)
+      requestVRAMStep      : out signed(2 downto 0);     -- ... Y step between them (+-1, +-2 for interlaced drawing)
+      interlacedDrawing    : in  std_logic;
       requestVRAMIdle      : in  std_logic;
       requestVRAMDone      : in  std_logic;
       vram_DOUT            : in  std_logic_vector(63 downto 0);
@@ -252,6 +255,7 @@ architecture arch of gpu_pixelpipeline is
       WAITPALETTE
    );
    signal state : tState := IDLE;
+   signal prof_state : integer := 0;   -- simulation profiling (sim/gpu): state as an integer
    
    signal pipeline_stall_1    : std_logic := '0';
    
@@ -260,6 +264,18 @@ architecture arch of gpu_pixelpipeline is
    signal reqVRAMXPos         : unsigned(9 downto 0)  := (others => '0');
    signal reqVRAMYPos         : unsigned(9 downto 0)  := (others => '0');
    signal reqVRAMSize         : unsigned(10 downto 0) := (others => '0');
+   -- System 10 (the board's GPU draws 1.5x faster from SGRAM; here every texture miss costs a DDR3 round trip):
+   -- a miss reads the missed word to the end of its cache row and the same words of up to 3 more texture rows of
+   -- the cache block, in the direction the primitive walks (every 2nd row for interlaced drawing, upwards for
+   -- vertically flipped textures). Sprite-heavy 480i screens (Gamshara title, Star Trigon) then fit in a field.
+   signal reqVRAMRows         : unsigned(1 downto 0) := (others => '0');
+   signal reqVRAMStep         : signed(2 downto 0) := (others => '0');
+   signal fillWords           : unsigned(2 downto 0) := (others => '0');  -- words per row - 1
+   signal fillWord            : unsigned(2 downto 0) := (others => '0');  -- word of the row being received
+   signal fillRowStart        : unsigned(7 downto 0) := (others => '0');  -- cache line of the row's first word
+   signal fillRowInc          : unsigned(7 downto 0) := (others => '0');  -- cache line step between rows
+   signal lastMissV           : unsigned(9 downto 0) := (others => '0');
+   signal missRowsUp          : std_logic := '0';
   
    signal stageS_valid        : std_logic := '0';
    signal stageS_texture      : std_logic := '0';
@@ -447,13 +463,17 @@ architecture arch of gpu_pixelpipeline is
    signal stage6_cg           : std_logic_vector(7 downto 0) := (others => '0');
    signal stage6_cb           : std_logic_vector(7 downto 0) := (others => '0');
   
-begin 
+begin
+
+   prof_state <= tState'pos(state); 
 
    pipeline_stall <= '1' when (pixelStall = '1' or state /= IDLE or slowdown = '1') else '0';
 
    requestVRAMEnable <= '1'         when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else '0';
    requestVRAMXPos   <= reqVRAMXPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
    requestVRAMYPos   <= reqVRAMYPos when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
+   requestVRAMRows   <= reqVRAMRows when (requestVRAMIdle = '1' and state = REQUESTTEXTURE) else (others => '0');
+   requestVRAMStep   <= reqVRAMStep;
    requestVRAMSize   <= reqVRAMSize when (requestVRAMIdle = '1' and (state = REQUESTTEXTURE or (state = REQUESTPALETTE and fifoOut_idle = '1'))) else (others => '0');
    
    stage0_u_array(0) <= stage0_u; 
@@ -690,9 +710,16 @@ begin
       variable colorMixr   : integer range -255 to 511;
       variable colorMixg   : integer range -255 to 511;
       variable colorMixb   : integer range -255 to 511;
+      variable missWord    : integer range 0 to 7;
+      variable missRow     : integer range 0 to 63;
+      variable rowLast     : integer range 0 to 63;
+      variable missDist    : integer range -1023 to 1023;
+      variable rowsUp      : std_logic;
+      variable rowStep     : integer range -2 to 2;
+      variable rowCount    : integer range 0 to 3;
    begin
       if rising_edge(clk2x) then
-         
+
          tag_wren_a    <= '0';
          
          -- must be done here, so it also is effected when ce is off = paused
@@ -706,7 +733,16 @@ begin
             end if;
             if (vram_DOUT_READY = '1') then
                tag_wren_a    <= '1';
-               tagValid(to_integer(tag_address_a)) <= '1';
+               tag_address_a <= cache_address_a;
+               tagValid(to_integer(cache_address_a)) <= '1';
+               if (fillWord = fillWords) then          -- next row
+                  fillWord        <= (others => '0');
+                  fillRowStart    <= fillRowStart + fillRowInc;
+                  cache_address_a <= fillRowStart + fillRowInc;
+               else
+                  fillWord        <= fillWord + 1;
+                  cache_address_a <= cache_address_a + 1;
+               end if;
             end if;
          end if;
                
@@ -791,10 +827,48 @@ begin
                      tag_data_a      <= std_logic_vector(tag_data(0));
                      tag_address_a   <= tag_addr(0);
                      cache_address_a <= tag_addr(0);
-                     
+
                      reqVRAMXPos <= stage0_textaddr(0)(10 downto 1);
                      reqVRAMYPos <= stage0_textaddr(0)(20 downto 11);
                      reqVRAMSize <= to_unsigned(1, 11);
+                     -- System 10 multi-row fill (see reqVRAMRows): the missed word to the end of the cache row, and
+                     -- up to 3 more rows. Cache rows: 4 words / 64 rows (4/8-bit), 8 words / 32 rows (15-bit).
+                     reqVRAMXPos  <= stage0_textaddr(0)(10 downto 3) & "00";
+                     fillWord     <= (others => '0');
+                     fillRowStart <= tag_addr(0);
+                     if (drawMode(8) = '0') then
+                        missWord := to_integer(stage0_textaddr(0)(4 downto 3));
+                        missRow  := to_integer(stage0_textaddr(0)(16 downto 11));
+                        rowLast  := 63;
+                        reqVRAMSize <= to_unsigned((4 - missWord) * 4, 11);
+                        fillWords   <= to_unsigned(3 - missWord, 3);
+                     else
+                        missWord := to_integer(stage0_textaddr(0)(5 downto 3));
+                        missRow  := to_integer(stage0_textaddr(0)(15 downto 11));
+                        rowLast  := 31;
+                        reqVRAMSize <= to_unsigned((8 - missWord) * 4, 11);
+                        fillWords   <= to_unsigned(7 - missWord, 3);
+                     end if;
+                     -- direction: rows the primitive will draw next (a miss just above the previous one = upwards)
+                     missDist := to_integer(stage0_textaddr(0)(20 downto 11)) - to_integer(lastMissV);
+                     rowsUp   := missRowsUp;
+                     if (missDist < 0 and missDist >= -8) then rowsUp := '1'; end if;
+                     if (missDist > 0 and missDist <= 8)  then rowsUp := '0'; end if;
+                     missRowsUp <= rowsUp;
+                     lastMissV  <= stage0_textaddr(0)(20 downto 11);
+                     if (interlacedDrawing = '1') then rowStep := 2; else rowStep := 1; end if;
+                     if (rowsUp = '1') then rowStep := -rowStep; end if;
+                     rowCount := 0;
+                     for k in 1 to 3 loop
+                        if (missRow + k * rowStep >= 0 and missRow + k * rowStep <= rowLast) then rowCount := k; end if;
+                     end loop;
+                     reqVRAMRows <= to_unsigned(rowCount, 2);
+                     reqVRAMStep <= to_signed(rowStep, 3);
+                     if (drawMode(8) = '0') then
+                        fillRowInc <= unsigned(to_signed(rowStep * 4, 8));
+                     else
+                        fillRowInc <= unsigned(to_signed(rowStep * 8, 8));
+                     end if;
                   end if;
                
                when REQUESTMORETEXTURE =>
@@ -812,7 +886,12 @@ begin
                   
                   reqVRAMXPos <= stage0_textaddr_1(selectIndex)(10 downto 1);
                   reqVRAMYPos <= stage0_textaddr_1(selectIndex)(20 downto 11);
-                  reqVRAMSize <= to_unsigned(1, 11);  
+                  reqVRAMSize <= to_unsigned(1, 11);
+                  reqVRAMRows <= (others => '0');
+                  fillWords   <= (others => '0');
+                  fillWord    <= (others => '0');
+                  fillRowStart <= tag_addr_1(selectIndex);
+                  fillRowInc  <= (others => '0');
                
                when REQUESTTEXTURE =>
                   -- cannot wait for fifoOut_idle here as this would kill the performance completly 
