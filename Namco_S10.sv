@@ -1565,10 +1565,11 @@ psx
    //sound
 	.sound_out_left(psx_aud_l),
 	.sound_out_right(psx_aud_r),
-   //savestates
+   // savestates: off. A PlayStation savestate cannot hold the System 10 board (MEM board, ATAPI, EXIO, MEM(P3)),
+   // so loading one would corrupt the game; tied off, the save/load logic is also removed by synthesis
    .increaseSSHeaderCount (1'b0),
-   .save_state            (ss_save),
-   .load_state            (ss_load),
+   .save_state            (1'b0),
+   .load_state            (1'b0),
    .savestate_number      (ss_slot),
    .state_loaded          (),
    .validSStates          (validSStates),
