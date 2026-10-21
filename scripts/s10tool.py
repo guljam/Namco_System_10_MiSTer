@@ -59,6 +59,14 @@ BOARDS = {
     "p3_family": dict(
         board="N", crypt=2, nand_big=False, xor=0xAAAA, save_base=0x4200, save_size=0x4200, memp3=True,
     ),
+    # NFL Classic Football: EXIO board with MCU (high-level) whose serial port talks to the cabinet's control-panel
+    # board (four trackballs, play-clock digits, lamps); own IN1 layout, PASS buttons on EXIO_IN1
+    "nfl_family": dict(
+        board="N", crypt=2, nand_big=False, xor=0xAAAA, save_base=0x4200, save_size=0x4200,
+        exio=0x30, exio_mcu=True, trackball=True, in1_layout=4, manufacturer="Namco / Metro", category="Sports",
+        joystick="trackball", players=4, rotation="vertical (ccw)",   # portrait monitor: OSD Orientation Vertical CCW
+        buttons=("Pass 1,Pass 2,Side Choose L,Side Choose R,Side Decide,Enter,Start,Coin,Test,Service,Pause", "A,B,X,Y,R2,L2,Start,Select,L,R,R3"),
+    ),
     "gamshara_family": dict(
         board="N", crypt=2, nand_big=False,
         perm=(0xd, 0xc, 0xf, 0xe, 0x8, 0x9, 0xb, 0xa, 0x5, 0x7, 0x4, 0x6, 0x0, 0x1, 0x2, 0x3),
@@ -198,8 +206,12 @@ GAMES.update({
                              ("chs1vera_9.1d", "822532d8"), ("chs1vera_10.2c", "46752e59"), ("chs1vera_11.1c", "fc9ed471"),
                              ("chs1vera_12.2b", "ab786753"), ("chs1vera_13.1b", "739e3b1e")],
                       perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x8, 0xb, 0x9, 0x6, 0x4, 0x7, 0x5, 0x0, 0x1, 0x3, 0x2)),
+    "nflclsfb":  dict(name="NFL Classic Football (US, NCF3 Ver.A.)", parent=None, region="US", year=2003,
+                      family="nfl_family", t2=ns10crypt.NFLCLSFB,
+                      nands=[("0.8e", "97ac7216"), ("1.8d", "d3f519d8"), ("2.7e", "0c65fdc2"), ("3.7d", "0a4e601d")],
+                      perm=(0xe, 0xd, 0xc, 0xf, 0x9, 0xb, 0x8, 0xa, 0x4, 0x5, 0x6, 0x7, 0x0, 0x3, 0x2, 0x1)),
 })
-MAIN = {"g13jnr": "g13jnr", "nicetsuk": "nicetsuk", "squizchs": "squizchs", "gahaha": "gahaha", "gahaha2": "gahaha2", "mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
+MAIN = {"nflclsfb": "nflclsfb", "g13jnr": "g13jnr", "nicetsuk": "nicetsuk", "squizchs": "squizchs", "gahaha": "gahaha", "gahaha2": "gahaha2", "mrdrilr2": "mrdrilr2", "mrdrilr2j": "mrdrilr2", "mrdrilr2u": "mrdrilr2", "mrdrilrg": "mrdrilrg",
         "ptblank3": "ptblank3", "gunbalina": "ptblank3", "gamshara": "gamshara", "gamsharao": "gamshara",
         "konotako": "konotako", "taiko2": "taiko2", "taiko3": "taiko3", "taiko4": "taiko4", "taiko5": "taiko5", "taiko6": "taiko6",
         "taikort": "taikort", "gjspace": "gjspace", "knpuzzle": "knpuzzle", "chocovdr": "chocovdr",
@@ -287,7 +299,7 @@ def mra_text(setname):
           f"    <region>{g['region']}</region>",
           f"    <players>{g.get('players', 2)}</players>",
           f"    <joystick>{g.get('joystick', '4-way')}</joystick>",
-          "    <rotation>horizontal</rotation>",
+          f"    <rotation>{g.get('rotation', 'horizontal')}</rotation>",
           f"    <buttons names=\"{g.get('buttons', BUTTONS)[0]}\" default=\"{g.get('buttons', BUTTONS)[1]}\"/>",
           "",
           f"    <switches default=\"{g.get('dip_default', 0xFF):02X}\">"]

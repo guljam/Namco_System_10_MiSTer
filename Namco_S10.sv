@@ -396,6 +396,12 @@ parameter CONF_STR = {
 	"H2P4-;",
 	"H2P4O[120],Gun aim P1,Joystick,Mouse;",
 	"H2P4O[121],Crosshair,Off,On;",
+	"H5P5,Trackball;",
+	"H5P5-;",
+	"H5P5O[123:122],Trackball Speed,1x,2x,4x,1/2;",
+	"H5P5O[124],Trackball Invert X,Off,On;",
+	"H5P5O[125],Trackball Invert Y,Off,On;",
+	"H5P5O[126],Analog Stick as Trackball,On,Off;",
 	"DIP;",
 	"P3,Hardware;",
 	"P3-;",
@@ -415,8 +421,9 @@ wire [127:0] status;
 wire        b_light_gun, b_cdrom, b_exio_mcu, b_exio_analog, b_memp3;
 wire  [3:0] b_in1_layout;
 // H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only; H3: Mount CD, CD games only;
-// H4: Mount audio, MEM(P3) games only
-wire [15:0] status_menumask = {11'd0, ~b_memp3, ~b_cdrom, ~b_light_gun, ~status[96], 1'b0};
+// H4: Mount audio, MEM(P3) games only; H5: Trackball page, NFL Classic Football only
+wire        b_nfl = (b_in1_layout == 4'd4);
+wire [15:0] status_menumask = {10'd0, ~b_nfl, ~b_memp3, ~b_cdrom, ~b_light_gun, ~status[96], 1'b0};
 wire        forced_scandoubler;
 wire [31:0] sd_lba0;                   // slot 0: CD-ROM image (s10_atapi) or MEM(P3) audio (s10_p3audio)
 wire [31:0] cd_lba, p3_lba;
@@ -995,6 +1002,81 @@ wire [31:0] in1_nicetsuk = {joy[13] | joy2[13], test_sw, joy[11], joy2[11], 4'b0
 wire [31:0] in1_squizchs = {joy[13] | joy2[13], test_sw, joy[11], joy2[11], 12'd0,
                             joy2[10], 3'b000, joy2[4], joy2[5], joy2[6], joy2[7],
                             joy[10],  3'b000, joy[4],  joy[5],  joy[6],  joy[7]};
+// 4 NFL Classic Football (MAME nflclsfb IN1): b0/b8 right side Choose L/R, b15 right side Decide (Player 2
+//   Buttons 3/4/5), b1/b9 left side Choose L/R, b7 left side Decide (Player 1 Buttons 3/4/5), b3/b2 Select
+//   Up/Down (Player 1 Up/Down), b4 Enter (Player 1 Button 6), b5/b6/b13/b14 Start 1P-4P; coins from all players
+wire [31:0] in1_nfl = {joy[13] | joy2[13] | joy3[13] | joy4[13], test_sw, joy[11] | joy3[11], joy2[11] | joy4[11],
+                       12'd0, joy2[8], joy4[10], joy3[10], 3'b000, joy[7], joy2[7],
+                       joy[8], joy2[10], joy[10], joy[9], joy[3], joy[2], joy[6], joy2[6]};
+// NFL EXIO_IN1 (active low): PASS 1 = Button 1 (bit 0 1P, 1 3P, 2 2P, 3 4P), PASS 2 = Button 2 (bits 4-7)
+wire [15:0] nfl_exio_in1 = ~{8'd0, joy4[5], joy2[5], joy3[5], joy[5], joy4[4], joy2[4], joy3[4], joy[4]};
+
+// NFL trackballs (the cabinet's control-panel board, see s10_exio): four free-running 8-bit X / Y counters.
+// Trackball 1 = USB mouse / trackball (PS/2 Y is up-positive) and the Player 1 left analog stick, trackballs 2-4 =
+// the Player 2-4 left analog sticks; a stick is a rate input (deadzone 12, ~2000 counts/s at full deflection, as
+// the Konami GV core's Simpsons Bowling trackball). The game: X right = counter up, Y up = counter up.
+// OSD: speed 1x / 2x / 4x / 1/2, invert X / Y, sticks on / off. Counters carry one fraction bit (for 1/2).
+reg  [8:0] tbx [0:3];
+reg  [8:0] tby [0:3];
+initial for (int i = 0; i < 4; i++) begin tbx[i] = 0; tby[i] = 0; end
+reg        tb_mtog = 0;
+reg [15:0] tb_tick = 0;
+reg signed [15:0] tb_ax [0:3];
+reg signed [15:0] tb_ay [0:3];
+initial for (int i = 0; i < 4; i++) begin tb_ax[i] = 0; tb_ay[i] = 0; end
+function automatic [15:0] tb_stick(input [1:0] i);
+	case (i)
+		2'd0: tb_stick = joystick_analog_l0;
+		2'd1: tb_stick = joystick_analog_l1;
+		2'd2: tb_stick = joystick_analog_l2;
+		default: tb_stick = joystick_analog_l3;
+	endcase
+endfunction
+function automatic [8:0] tb_scale(input signed [9:0] d, input [1:0] s);   // counts -> half counts
+	case (s)
+		2'd0: tb_scale = 9'(d <<< 1);
+		2'd1: tb_scale = 9'(d <<< 2);
+		2'd2: tb_scale = 9'(d <<< 3);
+		default: tb_scale = 9'(d);
+	endcase
+endfunction
+always @(posedge clk_1x) begin : nfl_trackball
+	reg signed [9:0]  dx [0:3];
+	reg signed [9:0]  dy [0:3];
+	reg signed [15:0] ax, ay;
+	reg signed [9:0]  stx, sty;
+	reg signed [7:0]  sx, sy;
+	for (int i = 0; i < 4; i++) begin dx[i] = 0; dy[i] = 0; end
+	if (mouse[24] != tb_mtog) begin
+		tb_mtog <= mouse[24];
+		dx[0] = 10'($signed({mouse[4], mouse[15:8]}));
+		dy[0] = 10'($signed({mouse[5], mouse[23:16]}));
+	end
+	tb_tick <= (tb_tick == 16'd33867) ? 16'd0 : tb_tick + 1'd1;               // 1 ms at 33.8688 MHz
+	if (tb_tick == 16'd33867 && !status[126]) begin
+		for (int i = 0; i < 4; i++) begin
+			sx = tb_stick(2'(i)) & 16'h00FF;
+			sy = tb_stick(2'(i)) >> 8;
+			ax = tb_ax[i];
+			ay = tb_ay[i];
+			if (sx > 8'sd12 || sx < -8'sd12) ax = ax + sx;
+			if (sy > 8'sd12 || sy < -8'sd12) ay = ay + sy;
+			stx = 10'(ax >>> 6);
+			sty = 10'(ay >>> 6);
+			tb_ax[i] <= ax - (16'(stx) <<< 6);
+			tb_ay[i] <= ay - (16'(sty) <<< 6);
+			dx[i] = dx[i] + stx;
+			dy[i] = dy[i] - sty;                                            // stick down = Y down
+		end
+	end
+	for (int i = 0; i < 4; i++) begin
+		tbx[i] <= status[124] ? tbx[i] - tb_scale(dx[i], status[123:122]) : tbx[i] + tb_scale(dx[i], status[123:122]);
+		tby[i] <= status[125] ? tby[i] - tb_scale(dy[i], status[123:122]) : tby[i] + tb_scale(dy[i], status[123:122]);
+	end
+end
+wire [63:0] nfl_tb = {tby[3][8:1], tbx[3][8:1], tby[2][8:1], tbx[2][8:1],
+                      tby[1][8:1], tbx[1][8:1], tby[0][8:1], tbx[0][8:1]};
+
 wire [7:0]  in_p1 = b_exio_analog ?{joy[10], 2'b00, joy[6] | joy2[6], joy[3] | joy2[3], joy[2] | joy2[2], joy[4], joy[5]}
                                   : {joy[10],  joy[6],  joy[5],  joy[4],  joy[3],  joy[2],  joy[1],  joy[0]};
 wire [7:0]  in_p2 = b_exio_analog ? {joy2[10], 5'b00000, joy2[4], joy2[5]}
@@ -1010,7 +1092,8 @@ wire [31:0] in1_std  = {joy[13] | joy2[13],            // b31 SERVICE1
                         joy[9], joy[8], joy[7],        // b19-17 P1 buttons 6-4
                         1'b0,                          // b16 unused
                         in_p2, in_p1};
-wire [31:0] s10_in1  = ~((b_in1_layout == 4'd2) ? in1_nicetsuk : (b_in1_layout == 4'd3) ? in1_squizchs : in1_std);
+wire [31:0] s10_in1  = ~((b_in1_layout == 4'd2) ? in1_nicetsuk : (b_in1_layout == 4'd3) ? in1_squizchs :
+                         (b_in1_layout == 4'd4) ? in1_nfl : in1_std);
 // DSW1 from the MRA <switches> (ioctl index 254): the byte is MAME's SYSTEM port bits 7-0 (active low,
 // SW1:1 = bit 7 ... SW1:8 = bit 0); all off (0xFF) when the MRA has no switches
 reg  [7:0] dsw_mra = 8'hFF;
@@ -1095,7 +1178,10 @@ s10_exio s10_exio
 	.analog ({ax10(joystick_analog_r1[15:8], 0), ax10(joystick_analog_r1[7:0], 1),     // P2 right Y, X (X reversed)
 	          ax10(joystick_analog_l1[15:8], 1), ax10(joystick_analog_l1[7:0], 0),     // P2 left Y (reversed), X
 	          ax10(joystick_analog_r0[15:8], 0), ax10(joystick_analog_r0[7:0], 1),     // P1 right
-	          ax10(joystick_analog_l0[15:8], 1), ax10(joystick_analog_l0[7:0], 0)})    // P1 left
+	          ax10(joystick_analog_l0[15:8], 1), ax10(joystick_analog_l0[7:0], 0)}),   // P1 left
+	.serial_en (b_nfl),
+	.tb        (nfl_tb),
+	.exio_in1  (b_nfl ? nfl_exio_in1 : 16'hFFFF)
 );
 
 // EXIO(G) light guns (Point Blank 3): aim from the MiSTer gun / analog stick or the mouse, trigger = button 1

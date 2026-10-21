@@ -106,9 +106,31 @@ screen. Both `.bin` types `chdman` can write (2352- and 2048-byte sectors) and `
 | Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A) | `g13jnr` | 2001 | New in test10 (MEM(P3), needs its audio file, see below) |
 | Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A) | `nicetsuk` | 2002 | New in test10 (MEM(P3), needs its audio file) |
 | Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | New in test10 (MEM(P3), needs its audio file) |
+| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | New in test11 (trackballs, see below; MAME: not working) |
 
-The other System 10 games need hardware the core does not have yet: the EXFINAL board (Medal no Tatsujin), MGEXIO
-(medal games) and Taito's MEM(IO) (Hajime no Ippo).
+With NFL Classic Football, the core runs every System 10 game that can be played with ordinary controls. The rest of
+MAME's list are cabinets built around mechanics: the medal-pusher games (Puzz Ball, Sugorotic JAPAN, Pacman BALL, Slot
+no Oujisama, Sekai Kaseki Hakken, Ball Pom Line, Keroro Gunsou, Gegege no Kitaro, Medal no Tatsujin 1 and 2: MGEXIO /
+EXFINAL boards driving medal hoppers, pushers and sensors) and the punching-bag games (Knock Down 2001 with its P-DRIVE
+motor board, Hard Puncher Hajime no Ippo 1 and 2 on Taito's MEM(IO)). MAME lists all of them as not working.
+
+### NFL Classic Football: trackballs and the sideways screen
+
+The cabinet seats four players around a monitor mounted on its side, each with a trackball and two PASS buttons. The
+trackballs are read by a control-panel board (which also drives the play-clock digits and lamps) that talks to the
+EXIO board's microcontroller over a serial line. MAME has no emulation of that board, which is why MAME lists the game
+as not working. This core answers for it: the protocol was worked out from the game's code and confirmed in MAME with
+a scripted stand-in (the team-select cursor follows the trackball).
+
+* **Screen:** set **Orientation** to **Vertical CCW** in the OSD for an upright picture on a normal screen.
+* **Trackballs:** Player 1 uses a USB mouse / trackball and the left analog stick; Players 2-4 use their left analog
+  sticks. The **Trackball** OSD page has the speed (1x, 2x, 4x, 1/2), Invert X / Invert Y, and an option to turn the
+  analog sticks off.
+* **Buttons:** Button 1 = PASS 1 and Button 2 = PASS 2 for each player; Start = that player's Start. The two sides'
+  play-select buttons (Choose L / Choose R / Decide) are Player 1's (left side) and Player 2's (right side) Buttons
+  3 / 4 / 5. Player 1's Up / Down and Button 6 are the cabinet's Select Up / Down and Enter (service menu).
+* If MAME reports a wrong checksum for `0.8e` in your `nflclsfb.zip`, the game still runs (in MAME and here): the
+  core finds the file by name when the CRC does not match.
 
 ### MP3 board games: the audio file (Golgo 13, Nice Tsukkomi, Seishun Quiz)
 
@@ -229,6 +251,7 @@ The game also has its own gun calibration in its service menu (Test switch), as 
   World (English, the default) or Japan; Kono e Tako's selects Japan (*Kono e Tako*, the default) or Export
   (*Kono TaCO!*, the English Cristaltec release). The region is read at boot, so reset after changing it.
 * **Light Gun** (gun games only): see above.
+* **Trackball** (NFL Classic Football only): speed, invert X / Y, analog sticks as trackballs.
 * **Mount CD** (Taiko games) / **Mount audio** (MP3 board games): the disc or audio file, see above.
 * **Hardware**: Pause when OSD open.
 
