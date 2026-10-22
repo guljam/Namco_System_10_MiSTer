@@ -153,7 +153,13 @@ module s10_loader #(
     reg  [7:0] wb_be = 0;
     reg [27:0] wb_a = 0;
 
-    assign ioctl_wait = sd_wait || wb_req || bios_filling || fill_busy && bios_dl;
+    // PSX VRAM (DDR3 +0, 1 MB) and SPU RAM (+0x300000, 512 KB) are zeroed when a game loads (the board record, index 1,
+    // comes first), as MAME starts them: otherwise the previous game's pixels show in lines a game never draws
+    // (Taiko no Tatsujin 3 leaves rows 0 / 239 / 240 / 479 and its right edge alone)
+    reg        vclr_req = 1'b0;            // clk
+    reg        vclr_done = 1'b0;           // clk2
+
+    assign ioctl_wait = sd_wait || wb_req || vclr_req || bios_filling || fill_busy && bios_dl;
 
     always @(posedge clk) begin
         dl_req     <= 1'b0;
@@ -163,6 +169,7 @@ module s10_loader #(
 
         if (dl_done) sd_wait <= 1'b0;
         if (wb_req && wb_done) wb_req <= 1'b0;
+        if (vclr_req && vclr_done) vclr_req <= 1'b0;
         if (bios_filling && !fill_busy && !fill_start) bios_filling <= 1'b0;
 
         if (dl_rise) begin
@@ -183,7 +190,7 @@ module s10_loader #(
                 fill_value   <= 32'h55555555;
                 bios_filling <= 1'b1;
             end
-            if (ioctl_index == 8'd1) record_ok <= 1'b0;
+            if (ioctl_index == 8'd1) begin record_ok <= 1'b0; vclr_req <= 1'b1; end
         end
 
         if (!ioctl_download && dl_q) begin
@@ -261,12 +268,24 @@ module s10_loader #(
     // =====================================================================================================
     // DDR3 beat writer (clk2): owns the port during image / nvram downloads
     // =====================================================================================================
-    assign ddr_own = img_dl || wb_req || wb_done;
     reg wbusy = 1'b0;
+    assign ddr_own = img_dl || wb_req || wb_done || vclr_req || vclr_done || wbusy;
+    reg [27:0] vclr_a = 0;
     always @(posedge clk2) begin
         if (!wb_req) wb_done <= 1'b0;
+        if (!vclr_req) begin vclr_done <= 1'b0; vclr_a <= 0; end
         if (!wbusy) begin
-            if (wb_req && !wb_done && !ddr_we) begin
+            if (vclr_req && !vclr_done && !ddr_we) begin
+                ddr_we   <= 1'b1;
+                ddr_addr <= vclr_a;
+                ddr_din  <= 64'd0;
+                ddr_be   <= 8'hFF;
+                wbusy    <= 1'b1;
+                // VRAM 0x000000-0x0FFFFF, then SPU RAM 0x300000-0x37FFFF
+                if (vclr_a == 28'h00FFFF8) vclr_a <= 28'h0300000;
+                else if (vclr_a == 28'h037FFF8) vclr_done <= 1'b1;
+                else vclr_a <= vclr_a + 28'd8;
+            end else if (wb_req && !wb_done && !ddr_we) begin
                 ddr_we   <= 1'b1;
                 ddr_addr <= IMG_BASE + wb_a;
                 ddr_din  <= wb_d;

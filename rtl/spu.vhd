@@ -234,6 +234,7 @@ architecture arch of spu is
    signal capturePosition     : unsigned(9 downto 0) := (others => '0');
    signal sampleticks         : unsigned(9 downto 0) := (others => '0');
    signal stashedSamples      : integer range 0 to 15 := 0;
+   signal xferBehindUsed      : std_logic := '0';   -- System 10: the one transfer word allowed in this pass while behind
    
    -- ram
    signal ram_dataWrite       : std_logic_vector(15 downto 0) := (others => '0');
@@ -1465,6 +1466,7 @@ begin
                      soundright     <= (others => '0');
                      reverbsumleft  <= (others => '0');
                      reverbsumright <= (others => '0');
+                     xferBehindUsed <= '0';
                      
                      if (stashedSamples > 0 and sampleticks /= 0) then
                         stashedSamples <= stashedSamples - 1;
@@ -1852,15 +1854,20 @@ begin
                   
                   ram_Adr         <= std_logic_vector(ramTransferAddr);
                   
-                  -- System 10 (512 clk per sample): no data transfer while samples are stashed, so a sample upload
-                  -- cannot push the voice processing behind until samples are lost (the DMA just waits)
-                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0' and stashedSamples = 0) then
+                  -- System 10 (512 clk per sample): while samples are stashed (the voice processing is behind) a data
+                  -- transfer is rate-limited to one word per sample pass instead of one per voice, so a sample upload
+                  -- cannot push the SPU behind until samples are lost (Gamshara). It must not stop altogether: with
+                  -- real DDR3 latency some games are behind even without transfers (Star Trigon's boot), and a
+                  -- blocked transfer never lets their sample upload (DMA) finish.
+                  if (CNT(5 downto 4) = "11" and FifoOut_NearFull = '0' and (stashedSamples = 0 or xferBehindUsed = '0')) then
+                     if (stashedSamples > 0) then xferBehindUsed <= '1'; end if;
                      state           <= RAM_READ;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';
                      ram_rnw         <= '1';
                      ramTransferAddr <= ramTransferAddr + 2;
-                  elsif (FifoIn_Empty = '0' and stashedSamples = 0) then
+                  elsif (FifoIn_Empty = '0' and (stashedSamples = 0 or xferBehindUsed = '0')) then
+                     if (stashedSamples > 0) then xferBehindUsed <= '1'; end if;
                      state           <= RAM_WRITE;
                      ram_request     <= '1';
                      ram_isTransfer  <= '1';

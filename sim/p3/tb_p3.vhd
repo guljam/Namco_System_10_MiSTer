@@ -19,7 +19,13 @@ entity tb_p3 is
       P3A_IMG : string := "audio.p3a";
       SELS    : string := "10,18";           -- hex table offsets, comma separated
       DBG     : boolean := false;
-      HOLD    : natural := 0                -- frames the right channel must stay on the track value (ring wraps)
+      HOLD    : natural := 0;               -- frames the right channel must stay on the track value (ring wraps)
+      -- replay mode (CAP_IMG set): the MCU RAM starts empty, every captured main-CPU access (local/mame/p3cap.lua) is
+      -- presented on the board bus as the PSX memory mux does, GAP clocks apart; play requests are logged and the RAM
+      -- is compared with MAME's at the end (REF_IMG)
+      CAP_IMG : string := "";
+      REF_IMG : string := "";
+      GAP     : natural := 6
    );
 end entity;
 
@@ -170,14 +176,18 @@ begin
       file f : charfile;
       variable w : std_logic_vector(63 downto 0);
    begin
-      file_open(f, MCU_IMG, read_mode);
-      for i in 0 to 1048575 loop
-         for b in 0 to 7 loop
-            read(f, c); w(8 * b + 7 downto 8 * b) := std_logic_vector(to_unsigned(character'pos(c), 8));
+      if CAP_IMG = "" then
+         file_open(f, MCU_IMG, read_mode);
+         for i in 0 to 1048575 loop
+            for b in 0 to 7 loop
+               read(f, c); w(8 * b + 7 downto 8 * b) := std_logic_vector(to_unsigned(character'pos(c), 8));
+            end loop;
+            mem(i) := w;
          end loop;
-         mem(i) := w;
-      end loop;
-      file_close(f);
+         file_close(f);
+      else
+         for i in 0 to 1048575 loop mem(i) := (others => '0'); end loop;
+      end if;
       loop
          wait until rising_edge(clk2);
          if d_request = '1' then
@@ -235,6 +245,26 @@ begin
       end loop;
    end process;
 
+   -- play requests as they happen, and the track the player finds (test tones: right channel = 1000 + track)
+   plays : process
+      variable L : line;
+   begin
+      wait until rising_edge(clk) and play_req = '1';
+      write(L, string'("PLAY len ") & integer'image(to_integer(unsigned(play_len))) & string'(" C0 ") & to_hstring(play_c0) &
+               string'(" C1 ") & to_hstring(play_c1) & string'(" C2 ") & to_hstring(play_c2) & string'(" vol ") &
+               integer'image(to_integer(unsigned(volume))));
+      writeline(output, L);
+      for t in 0 to 400000 loop
+         wait until rising_edge(clk);
+         if audio_r /= x"0000" then
+            write(L, string'("  -> audio_r ") & integer'image(to_integer(signed(audio_r))));
+            writeline(output, L);
+            exit;
+         end if;
+         exit when play_req = '1';
+      end loop;
+   end process;
+
    -- the game
    cpu : process
       variable L : line;
@@ -250,7 +280,7 @@ begin
       begin
          ad := std_logic_vector(to_unsigned(a, 24));
          wait until rising_edge(clk);
-         addr <= ad; wr <= '1';
+         addr <= ad(23 downto 2) & "00"; wr <= '1';             -- word-aligned + lanes, as the memory mux
          if ad(1) = '1' then wmask <= "1100"; wdata <= std_logic_vector(to_unsigned(v, 16)) & x"0000";
          else wmask <= "0011"; wdata <= x"0000" & std_logic_vector(to_unsigned(v, 16)); end if;
          wait until rising_edge(clk); wr <= '0';
@@ -272,10 +302,73 @@ begin
             for i in 1 to 20 loop wait until rising_edge(clk); end loop;
          end loop;
       end procedure;
+      procedure replay is
+         file f, g : charfile;
+         variable c : character;
+         variable rb : std_logic_vector(103 downto 0);
+         variable o, mk : std_logic_vector(31 downto 0);
+         variable t, nrec, nbad : natural := 0;
+         variable w : std_logic_vector(63 downto 0);
+         variable badblk : natural;
+      begin
+         file_open(f, CAP_IMG, read_mode);
+         while not endfile(f) loop
+            for b in 0 to 12 loop
+               read(f, c); rb(8 * b + 7 downto 8 * b) := std_logic_vector(to_unsigned(character'pos(c), 8));
+            end loop;
+            o := rb(39 downto 8); mk := rb(103 downto 72);
+            wait until rising_edge(clk);
+            if rb(7 downto 0) = x"00" then
+               addr <= o(23 downto 2) & "00"; wdata <= rb(71 downto 40);
+               for b in 0 to 3 loop wmask(b) <= mk(8 * b); end loop;
+               wr <= '1';
+               wait until rising_edge(clk); wr <= '0';
+            else
+               if mk = x"FFFF0000" then addr <= o(23 downto 2) & "10"; else addr <= o(23 downto 2) & "00"; end if;
+               rd <= '1';
+               wait until rising_edge(clk); rd <= '0';
+               wait until rising_edge(clk);
+               while stall = '1' loop wait until rising_edge(clk); end loop;
+            end if;
+            for i in 1 to GAP loop wait until rising_edge(clk); end loop;
+            nrec := nrec + 1;
+            if nrec mod 200000 = 0 then
+               write(L, string'("records ") & integer'image(nrec)); writeline(output, L);
+            end if;
+         end loop;
+         file_close(f);
+         for i in 1 to 200000 loop wait until rising_edge(clk); end loop;
+         -- compare the MCU RAM with MAME's (per 64 KB block: blocks with differences)
+         file_open(g, REF_IMG, read_mode);
+         badblk := 0;
+         for blk in 0 to 127 loop
+            nbad := 0;
+            for i in 0 to 8191 loop
+               for b in 0 to 7 loop
+                  read(g, c); w(8 * b + 7 downto 8 * b) := std_logic_vector(to_unsigned(character'pos(c), 8));
+               end loop;
+               if w /= mem(blk * 8192 + i) then nbad := nbad + 1; end if;
+            end loop;
+            if nbad /= 0 then
+               badblk := badblk + 1;
+               write(L, string'("RAM 0x") & to_hstring(to_unsigned(16#800000# + blk * 65536, 24)) &
+                        string'(" beats differing: ") & integer'image(nbad));
+               writeline(output, L);
+            end if;
+         end loop;
+         file_close(g);
+         write(L, string'("records ") & integer'image(nrec) & string'(", RAM blocks differing ") & integer'image(badblk));
+         writeline(output, L);
+      end procedure;
    begin
       for i in 1 to 20 loop wait until rising_edge(clk); end loop;
       reset <= '0';
       for i in 1 to 2000 loop wait until rising_edge(clk); end loop;
+      if CAP_IMG /= "" then
+         replay;
+         write(L, string'("DONE")); writeline(output, L);
+         std.env.finish;
+      end if;
       command(16#56#, 0, 0);
       i0 := 1;
       while i0 <= sels_v'length loop

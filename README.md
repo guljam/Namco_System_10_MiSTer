@@ -8,11 +8,10 @@ I created this core because I wanted to play these games on my MiSTer FPGA. I am
 sourcing it for everyone to enjoy and give feedback/make improvements. This core was created with the
 assistance of AI tooling.
 
-**Status: beta.** Tested on hardware: Mr. Driller 2 and G, Point Blank 3 and Gunbalina (GunCon 2), Gamshara, Kono e
-Tako, GekiToride-Jong Space, Mojipittan, Chocovader Contactee, GAHAHA Ippatsudou 1 / 2 and Taiko no Tatsujin 2.
-In testing: Taiko no Tatsujin 3 / 4 / 5 / 6 / RT, Panikuru Panekuru (music), Star Trigon (does not start since test8,
-being fixed). The core is built so that the rest of the System 10
-library can be added game by game.
+**Status: beta.** Tested working on hardware: Mr. Driller 2 and G, Point Blank 3 and Gunbalina (GunCon 2), Gamshara,
+Kono e Tako, GekiToride-Jong Space, Mojipittan, Chocovader Contactee, GAHAHA Ippatsudou 1 / 2, Panikuru Panekuru and
+Taiko no Tatsujin 2 / 4 / 5 / RT. Fixed in test12, in testing: Star Trigon, Taiko no Tatsujin 3 and 6, the MEM(P3)
+games' music (Golgo 13, Nice Tsukkomi, Seishun Quiz) and NFL Classic Football's PASS buttons.
 
 ## Quick start
 
@@ -38,11 +37,11 @@ ROMs are not included. You must supply your own.
 | GAHAHA Ippatsudou (World, GID2 Ver.A) | `gahaha` | 2000 | MEM(N) + EXIO (analog sticks) | | Tested working |
 | GAHAHA Ippatsudou 2 (Japan, GIS1 Ver.A) | `gahaha2` | 2001 | MEM(N) + EXIO (analog sticks) | | Tested working |
 | Taiko no Tatsujin 2 (Japan, TK21 Ver.C) | `taiko2` | 2001 | MEM(N) + EXIO + CD-ROM | 240p | Tested working |
-| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
-| Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2002 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
-| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
-| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
-| Taiko no Tatsujin RT: Nippon no Kokoro (Japan, TKN1 Ver.A) | `taikort` | 2004 | MEM(N) + EXIO + CD-ROM | 240p | In testing |
+| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | 240p | Plays; stray coloured lines at the screen edges fixed in test12 (in testing) |
+| Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2002 | MEM(N) + EXIO + CD-ROM | 240p | Tested working |
+| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | 240p | Tested working |
+| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | 240p | Plays; song previews silent up to test11 (in testing) |
+| Taiko no Tatsujin RT: Nippon no Kokoro (Japan, TKN1 Ver.A) | `taikort` | 2004 | MEM(N) + EXIO + CD-ROM | 240p | Tested working |
 
 **Gamshara, Star Trigon (480i graphics).** Both games draw their 480i screens into a single buffer, one field per
 frame, while the other field is on screen. System 10's GPU draws 1.5x faster than a PlayStation's (and from fast
@@ -89,7 +88,9 @@ On Windows, from the MAME folder: `chdman.exe extractcd -i roms\taiko2\nm-002.ch
 for %g in (taiko2\nm-002 taiko3\nm-003 taiko4\tk-41 taiko5\tk-5 taiko6\tk-6 taikort\tk-n) do chdman extractcd -i roms\%g.chd -o %~ng.cue
 ```
 
-**3. Copy the `.bin`** to the SD card, for example `/media/fat/games/Namco_S10/` (the `.cue` is not needed).
+**3. Copy the `.bin`** to **`/media/fat/games/Namco_S10/`** on the SD card (the `.cue` is not needed). Create the
+`Namco_S10` folder first if it does not exist: **Mount CD** opens that folder, and without it MiSTer shows an error
+instead of a file list (an empty folder is enough to browse from).
 
 **4. Mount it once.** Start the game, open the OSD (F12) and choose **Mount CD**, then the `.bin`. The game restarts
 with the disc in the drive (on test builds up to test6, choose **Reset** after mounting). The core remembers the disc
@@ -101,12 +102,12 @@ screen. Both `.bin` types `chdman` can write (2352- and 2048-byte sectors) and `
 | Game | MAME set | Year | Status |
 | --- | --- | --- | --- |
 | Uchuu Daisakusen: Chocovader Contactee (Japan, CVC1 Ver.A) | `chocovdr` | 2002 | Tested working |
-| Panikuru Panekuru (Japan, PPA1 Ver.A) | `panikuru` | 2002 | Runs; music silent up to test8 (it streams the music from the ROM board by DMA; fixed in test9, in testing) |
-| Star Trigon (Japan, STT1 Ver.A) | `startrgn` | 2002 | Black screen after the colour bars on test8; reaches its NOTICE screen in simulation from test9 (in testing) |
-| Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A) | `g13jnr` | 2001 | New in test10 (MEM(P3), needs its audio file, see below) |
-| Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A) | `nicetsuk` | 2002 | New in test10 (MEM(P3), needs its audio file) |
-| Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | New in test10 (MEM(P3), needs its audio file) |
-| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | New in test11 (trackballs, see below; MAME: not working) |
+| Panikuru Panekuru (Japan, PPA1 Ver.A) | `panikuru` | 2002 | Tested working (music from test9) |
+| Star Trigon (Japan, STT1 Ver.A) | `startrgn` | 2002 | Black screen after the colour bars from test8 to test11; fixed in test12 (in testing) |
+| Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A) | `g13jnr` | 2001 | Plays (GunCon 2); music from test12, with its audio file (see below) |
+| Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A) | `nicetsuk` | 2002 | Plays; music from test12, with its audio file |
+| Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | Plays; music from test12, with its audio file |
+| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | Plays (trackballs, see below; MAME: not working); PASS buttons from test12 |
 
 With NFL Classic Football, the core runs every System 10 game that can be played with ordinary controls. The rest of
 MAME's list are cabinets built around mechanics: the medal-pusher games (Puzz Ball, Sugorotic JAPAN, Pacman BALL, Slot
@@ -127,8 +128,9 @@ a scripted stand-in (the team-select cursor follows the trackball).
   sticks. The **Trackball** OSD page has the speed (1x, 2x, 4x, 1/2), Invert X / Invert Y, and an option to turn the
   analog sticks off.
 * **Buttons:** Button 1 = PASS 1 and Button 2 = PASS 2 for each player; Start = that player's Start. The two sides'
-  play-select buttons (Choose L / Choose R / Decide) are Player 1's (left side) and Player 2's (right side) Buttons
-  3 / 4 / 5. Player 1's Up / Down and Button 6 are the cabinet's Select Up / Down and Enter (service menu).
+  play-select buttons (Choose L / Choose R / Decide; the service menu calls them LEFT SIDE (1P, 2P) and RIGHT SIDE
+  (3P, 4P)) are Player 1's and Player 2's Buttons 3 / 4 / 5. Player 1's Up / Down and Button 6 are the cabinet's
+  Select Up / Down and Enter (service menu).
 * If MAME reports a wrong checksum for `0.8e` in your `nflclsfb.zip`, the game still runs (in MAME and here): the
   core finds the file by name when the CRC does not match.
 
@@ -156,7 +158,8 @@ This writes `g13jnr.p3a` (16-bit stereo, 44.1 kHz):
 | Nice Tsukkomi | `nicetsuk` | 873 tracks, 39 min | about 400 MB |
 | Seishun Quiz | `squizchs` | 87 tracks, 36 min | about 360 MB |
 
-**3. Copy the `.p3a`** to the SD card, for example `/media/fat/games/Namco_S10/`.
+**3. Copy the `.p3a`** to **`/media/fat/games/Namco_S10/`**, the folder **Mount audio** opens (create it if it does
+not exist, as for the Taiko discs).
 
 **4. Mount it once.** Start the game, open the OSD (F12), choose **Mount audio**, then the `.p3a`. The core remembers
 the file for each game, as it does for the Taiko discs.

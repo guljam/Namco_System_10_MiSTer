@@ -121,7 +121,9 @@ module s10_io #(
     wire [23:0] a_hi = {addr[23:2], 2'b10};
     wire        sel  = (addr[23:16] == 8'hBA) || (addr[23:16] == 8'hBF) || (addr[23:16] == 8'hB2) ||
                        (addr[23:16] == 8'hB6) || (addr[23:16] == 8'hBC) ||
-                       (addr[23:21] == 3'b111 && exio_ident != 8'hFF);      // EXIO window 0xE00000-0xFFFFFF
+                       // EXIO window 0xE00000-0xFFFFFF: EXIO(G) only; the EXIO board with the microcontroller (ident
+                       // 0x30: Taiko, GAHAHA, NFL) is s10_exio's, whose EXIO_IN1 (NFL PASS buttons) this must not mask
+                       (addr[23:21] == 3'b111 && exio_ident == 8'h32);
 
     always @(posedge clk) begin
         irq10 <= 1'b0;

@@ -1298,7 +1298,7 @@ s10_p3audio s10_p3audio
 	.sd_buff_addr (sd_buff_addr),
 	.sd_buff_dout (sd_buff_dout),
 	.sd_buff_wr   (sd_buff_wr & b_memp3),
-	.img_mounted  (img_mounted[0] & b_memp3),
+	.img_mounted  (img_mounted[0]),                       // ungated: MiSTer may mount the remembered file before the record
 	.img_size     (img_size)
 );
 

@@ -225,13 +225,12 @@ module s10_p3 (
             if (push && !wr_win) cw_valid <= 1'b0;
 
             // ---- bus writes
+            // register writes: the PSX memory mux presents them word-aligned (addr[1:0] = 0) with byte lanes, so the
+            // 16-bit register is picked by the lanes: 0x300000 / 0x30000C = low half, 0x300006 = high half of 0x300004
             if (wr && hit_reg) begin
-                case (addr[3:1])
-                    3'd0: if ((wmask[1:0] != 0 ? wdata[15:0] : wdata[31:16]) == 16'd1) begin stop_req <= 1'b1; sel <= 0; end
-                    3'd3: if (wmask[3:2] != 0) begin busy <= 1'b1; end                  // 0x300006 (high half of 0x300004)
-                    3'd6: bank <= (wmask[1:0] != 0) ? wdata[5:0] : wdata[21:16];        // 0x30000C
-                    default: ;
-                endcase
+                if (addr[3:2] == 2'd0 && wmask[1:0] != 0 && wdata[15:0] == 16'd1) begin stop_req <= 1'b1; sel <= 0; end
+                if (addr[3:2] == 2'd1 && wmask[3:2] != 0) busy <= 1'b1;                   // 0x300006: command interrupt
+                if (addr[3:2] == 2'd3 && wmask[1:0] != 0) bank <= wdata[5:0];             // 0x30000C
             end
             if (wr_win) begin
                 // merge into the current beat (the old beat was pushed above if the beat changes)
