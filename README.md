@@ -1,6 +1,6 @@
 # Namco System 10 for MiSTer
 
-<img width="640" height="480" alt="image" src="https://github.com/user-attachments/assets/de94939c-fd12-4928-ad29-33867efa7ab5" /> <img width="640" height="480" alt="image" src="https://github.com/user-attachments/assets/4e74a50b-ad78-430b-bef4-282cc459e40a" />
+<img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/de94939c-fd12-4928-ad29-33867efa7ab5" /> <img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/4e74a50b-ad78-430b-bef4-282cc459e40a" />
 
 A MiSTer FPGA core for Namco's **System 10** arcade board (2000-2004), the PlayStation-based platform behind
 **Mr. Driller 2**, **Mr. Driller G**, **Point Blank 3**, **Gamshara**, **Taiko no Tatsujin**, **Golgo 13** and more.
