@@ -33,6 +33,7 @@ module s10_p3 (
     input  wire          wr,
     output reg   [31:0]  rdata = 0,
     output wire          stall,
+    output wire          wstall,            // write buffer nearly full: the memory mux holds the next CPU access
 
     input  wire   [9:0]  aim_x,             // Golgo 13 rifle, 0 = left
     input  wire   [9:0]  aim_y,             // 0 = top
@@ -151,6 +152,9 @@ module s10_p3 (
     reg   [5:0] cw_age = 0;
     always @(posedge clk) wf_rp1 <= wf_rp;
     wire        wf_full  = (wf_wp - wf_rp1) >= 7'd62;
+    // back-pressure well before the FIFO is full (the DDR3 port can wait behind the GPU for a long time); the
+    // mux holds the CPU after its current write, so at most a few more beats arrive while wstall is high
+    assign      wstall   = enable && (wf_wp - wf_rp1) >= 7'd48;
     wire        wf_empty = (wf_wp == wf_rp1);
 
     // aim: TMP95C061 ADREG word for a 10-bit value

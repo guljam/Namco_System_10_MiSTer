@@ -25,7 +25,8 @@ entity tb_p3 is
       -- is compared with MAME's at the end (REF_IMG)
       CAP_IMG : string := "";
       REF_IMG : string := "";
-      GAP     : natural := 6
+      GAP     : natural := 6;
+      DLAT    : natural := 4                -- DDR3 ack latency (clk2): large values stand for waits behind the GPU
    );
 end entity;
 
@@ -38,6 +39,7 @@ architecture sim of tb_p3 is
          addr : in std_logic_vector(23 downto 0); wdata : in std_logic_vector(31 downto 0);
          wmask : in std_logic_vector(3 downto 0); size : in std_logic_vector(1 downto 0);
          rd : in std_logic; wr : in std_logic; rdata : out std_logic_vector(31 downto 0); stall : out std_logic;
+         wstall : out std_logic;
          aim_x : in std_logic_vector(9 downto 0); aim_y : in std_logic_vector(9 downto 0);
          play_req : out std_logic; play_len : out std_logic_vector(23 downto 0);
          play_c0 : out std_logic_vector(31 downto 0); play_c1 : out std_logic_vector(31 downto 0);
@@ -91,6 +93,7 @@ architecture sim of tb_p3 is
    signal rd, wr    : std_logic := '0';
    signal rdata     : std_logic_vector(31 downto 0);
    signal stall     : std_logic;
+   signal wstall    : std_logic;
 
    signal play_req, stop_req : std_logic;
    signal play_len  : std_logic_vector(23 downto 0);
@@ -146,7 +149,7 @@ begin
 
    ip3 : s10_p3 port map (
       clk => clk, clk2 => clk2, reset => reset, enable => '1', mcu_base => MCU_BASE,
-      addr => addr, wdata => wdata, wmask => wmask, size => "01", rd => rd, wr => wr, rdata => rdata, stall => stall,
+      addr => addr, wdata => wdata, wmask => wmask, size => "01", rd => rd, wr => wr, rdata => rdata, stall => stall, wstall => wstall,
       aim_x => (others => '0'), aim_y => (others => '0'),
       play_req => play_req, play_len => play_len, play_c0 => play_c0, play_c1 => play_c1, play_c2 => play_c2,
       stop_req => stop_req, volume => volume,
@@ -193,7 +196,7 @@ begin
          if d_request = '1' then
             a := to_integer(unsigned(d_addr) - unsigned(MCU_BASE)) / 8;
             n := to_integer(unsigned(d_burstcnt));
-            for i in 1 to 4 loop wait until rising_edge(clk2); end loop;
+            for i in 1 to DLAT loop wait until rising_edge(clk2); end loop;
             d_ack <= '1'; wait until rising_edge(clk2); d_ack <= '0';
             if d_we = '1' then
                for b in 0 to 7 loop
@@ -323,12 +326,23 @@ begin
                for b in 0 to 3 loop wmask(b) <= mk(8 * b); end loop;
                wr <= '1';
                wait until rising_edge(clk); wr <= '0';
+               wait until rising_edge(clk);
+               while wstall = '1' loop wait until rising_edge(clk); end loop;   -- the memory mux holds the CPU
             else
                if mk = x"FFFF0000" then addr <= o(23 downto 2) & "10"; else addr <= o(23 downto 2) & "00"; end if;
                rd <= '1';
                wait until rising_edge(clk); rd <= '0';
                wait until rising_edge(clk);
                while stall = '1' loop wait until rising_edge(clk); end loop;
+               -- the game polls !busy (0x300006) until it reads 1 before its next command: do the same
+               if o(23 downto 0) = x"300004" and mk = x"FFFF0000" then
+                  while rdata(16) = '0' loop
+                     for i in 1 to 20 loop wait until rising_edge(clk); end loop;
+                     addr <= x"300006"; rd <= '1';
+                     wait until rising_edge(clk); rd <= '0';
+                     wait until rising_edge(clk);
+                  end loop;
+               end if;
             end if;
             for i in 1 to GAP loop wait until rising_edge(clk); end loop;
             nrec := nrec + 1;

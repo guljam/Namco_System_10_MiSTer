@@ -1227,7 +1227,7 @@ s10_io s10_io
 );
 
 // MEM(P3) board: MCU RAM window + high-level MCU / MP3 decoder (Golgo 13, Nice Tsukkomi, Seishun Quiz)
-wire        p3_play, p3_stop, p3_stall;
+wire        p3_play, p3_stop, p3_stall, p3_wstall;
 wire [23:0] p3_len;
 wire [31:0] p3_c0, p3_c1, p3_c2, s10_p3_rdata;
 wire  [6:0] p3_vol;
@@ -1256,6 +1256,7 @@ s10_p3 s10_p3
 	.wr             (s10_wr),
 	.rdata          (s10_p3_rdata),
 	.stall          (p3_stall),
+	.wstall         (p3_wstall),
 	.aim_x          ({gun_p1x, gun_p1x[7:6]}),                // Golgo 13 rifle: P1 gun / stick / mouse
 	.aim_y          ({gun_p1y, gun_p1y[7:6]}),
 	.play_req       (p3_play),
@@ -1710,6 +1711,7 @@ psx
    .s10_wr         (s10_wr),
    .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata | s10_p3_rdata),
    .s10_stall      (s10_stall | p3_stall),
+   .s10_wstall     (p3_wstall),
    .s10_irq10      (s10_irq10),
    .s10_exio       (b_exio_ident != 8'hFF),
    .s10_gun_cross  ({b_light_gun & status[121] & ~b_memp3, b_light_gun & status[121]}),   // Golgo 13: P1 only

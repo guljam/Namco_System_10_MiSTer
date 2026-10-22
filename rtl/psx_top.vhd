@@ -285,6 +285,7 @@ entity psx_top is
       s10_wr          : out std_logic := '0';
       s10_rdata       : in  std_logic_vector(31 downto 0) := (others => '0');
       s10_stall       : in  std_logic := '0';
+      s10_wstall      : in  std_logic := '0';   -- hold the CPU after a board write until the board can take more
       s10_irq10       : in  std_logic := '0';   -- I/O interrupt (PS1 IRQ10), rising edge
       -- System 10 MEM board DDR3 client (clk2x; byte address relative to DDR3 0x30000000)
       s10_ddr_request : in  std_logic := '0';
@@ -3972,6 +3973,7 @@ begin
       bus_znio_writeMask   => bus_znio_writeMask,
       bus_znio_dataRead    => bus_znio_dataRead,
       bus_znio_stall       => s10_stall,
+      bus_znio_wstall      => s10_wstall,
       bus_znio_size        => s10_size,
 
       zn_platform          => zn_platform,

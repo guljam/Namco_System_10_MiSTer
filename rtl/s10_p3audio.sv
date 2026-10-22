@@ -153,10 +153,20 @@ module s10_p3audio (
     wire        can_out  = (frames != 0) && (r_cnt >= 15'd2);
     wire signed [12:0] g = $signed({1'b0, gain_of(volume)});
 
-    function automatic match(input [31:0] f, input [31:0] c0, input [31:0] c1, input [31:0] c2);
-        match = (c0 == q_c0) && ({8'd0, q_len} >= f) && ({8'd0, q_len} < f + 32'd2048) &&
-                (q_len < 24'h003000 || c1 == q_c1) && (q_len < 24'h012000 || c2 == q_c2);
+    // An entry is the stream when its samples match and its length F fits the game's length T: normally
+    // F <= T < F + 2048 (the game's length is the file's, or rounded up to 2 KB, or includes a 128-byte ID3v1 tag);
+    // failing that, F - 1024 <= T < F (Seishun Quiz's table stops inside the zero-padded tail of the last frame)
+    function automatic keys(input [31:0] c0, input [31:0] c1, input [31:0] c2);
+        keys = (c0 == q_c0) && (q_len < 24'h003000 || c1 == q_c1) && (q_len < 24'h012000 || c2 == q_c2);
     endfunction
+    function automatic match(input [31:0] f, input [31:0] c0, input [31:0] c1, input [31:0] c2);
+        match = keys(c0, c1, c2) && ({8'd0, q_len} >= f) && ({8'd0, q_len} < f + 32'd2048);
+    endfunction
+    function automatic match_short(input [31:0] f, input [31:0] c0, input [31:0] c1, input [31:0] c2);
+        match_short = keys(c0, c1, c2) && ({8'd0, q_len} < f) && ({8'd0, q_len} + 32'd1024 >= f);
+    endfunction
+    reg         fb = 1'b0;                       // a match_short entry was seen (used if no exact match follows)
+    reg  [31:0] fb_start = 0, fb_frames = 0;
 
     always @(posedge clk) begin
         reg [14:0] add, sub;
@@ -187,6 +197,10 @@ module s10_p3audio (
                                     found   <= 1'b1;
                                     pcm_blk <= e_start;
                                     frames  <= {sd_buff_dout, e_frames_lo};
+                                end else if (entry < n_entries && !fb && match_short(e_len, e_c0, e_c1, e_c2)) begin
+                                    fb        <= 1'b1;
+                                    fb_start  <= e_start;
+                                    fb_frames <= {sd_buff_dout, e_frames_lo};
                                 end
                                 entry <= entry + 1'd1;
                             end
@@ -208,6 +222,9 @@ module s10_p3audio (
                         blocks_left <= (frames + 32'd255) >> 8;          // 256 stereo frames per 1 KB block
                         r_wp <= 0; r_rp <= 0; clr = 1'b1; tick <= 0; fetching <= 1'b0;
                         ast <= A_PLAY;
+                    end else if (entry >= n_entries && fb) begin         // only the slightly longer file matched
+                        found <= 1'b1; pcm_blk <= fb_start; frames <= fb_frames;
+                        // A_SCANW again with found set: starts the stream on the next clock
                     end else if (entry >= n_entries) ast <= A_IDLE;      // not in the file: silence
                     else begin scan_blk <= scan_blk + 1'd1; ast <= A_SCAN; end
                 end
@@ -247,7 +264,7 @@ module s10_p3audio (
             if (stop_req) begin ast <= A_IDLE; frames <= 0; audio_l <= 0; audio_r <= 0; end
             if (play_req && disc) begin
                 q_len <= play_len; q_c0 <= play_c0; q_c1 <= play_c1; q_c2 <= play_c2;
-                scan_blk <= 0; entry <= 0; n_entries <= 32'hFFFFFFFF; found <= 1'b0; frames <= 0;
+                scan_blk <= 0; entry <= 0; n_entries <= 32'hFFFFFFFF; found <= 1'b0; frames <= 0; fb <= 1'b0;
                 audio_l <= 0; audio_r <= 0;
                 ast <= A_SCAN;
             end

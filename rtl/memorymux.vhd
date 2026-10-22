@@ -134,6 +134,7 @@ entity memorymux is
       bus_znio_writeMask   : out std_logic_vector(3 downto 0);
       bus_znio_dataRead    : in  std_logic_vector(31 downto 0);
       bus_znio_stall       : in  std_logic := '0';   -- System 10 board: read data not ready yet
+      bus_znio_wstall      : in  std_logic := '0';   -- System 10 board: hold the next access (write buffer nearly full)
       bus_znio_size        : out std_logic_vector(1 downto 0);   -- access size: 00 byte, 01 half, 10 word
 
       -- ZN platform: 0=Visco, 1=Raizing, 2=Taito FX, 3=Atlus, 4=Tecmo
@@ -1262,6 +1263,8 @@ begin
                when BUSWRITE =>
                   if (gp1_hold = '1') then
                      gp1_holdcnt <= gp1_holdcnt + 1;
+                  elsif (bus_znio_wstall = '1') then
+                     null;   -- System 10 MEM(P3) RAM window: its write buffer drains to DDR3 first (CPU writes are not lost)
                   else
                      gp1_holdcnt <= (others => '0');
                      state       <= IDLE;
