@@ -49,7 +49,7 @@ entity gpu_videoout is
       errorCode                  : in  unsigned(3 downto 0); 
       
       LBAOn                      : in  std_logic;
-      LBAdisplay                 : in  unsigned(31 downto 0);   -- debug readout, 8 hex digits
+      LBAdisplay                 : in  unsigned(19 downto 0);
          
       requestVRAMEnable          : out std_logic := '0';
       requestVRAMMirror          : out std_logic := '0';
@@ -158,7 +158,7 @@ architecture arch of gpu_videoout is
    signal overlay_error_data  : std_logic_vector(23 downto 0);
    signal overlay_error_ena   : std_logic;   
    
-   signal lbatext             : unsigned(63 downto 0);
+   signal lbatext             : unsigned(39 downto 0);
    signal overlay_lba_data    : std_logic_vector(23 downto 0);
    signal overlay_lba_ena     : std_logic;
    
@@ -521,19 +521,16 @@ begin
       textstring             => x"45" & errortext
    );    
    
-   lbatext(7 downto 0) <= resize(LBAdisplay(3 downto 0), 8) + 16#30# when (LBAdisplay(3 downto 0) < 10) else resize(LBAdisplay(3 downto 0), 8) + 16#37#;
-   lbatext(15 downto 8) <= resize(LBAdisplay(7 downto 4), 8) + 16#30# when (LBAdisplay(7 downto 4) < 10) else resize(LBAdisplay(7 downto 4), 8) + 16#37#;
-   lbatext(23 downto 16) <= resize(LBAdisplay(11 downto 8), 8) + 16#30# when (LBAdisplay(11 downto 8) < 10) else resize(LBAdisplay(11 downto 8), 8) + 16#37#;
+   lbatext( 7 downto  0) <= resize(LBAdisplay( 3 downto  0), 8) + 16#30# when (LBAdisplay( 3 downto  0) < 10) else resize(LBAdisplay( 3 downto  0), 8) + 16#37#;
+   lbatext(15 downto  8) <= resize(LBAdisplay( 7 downto  4), 8) + 16#30# when (LBAdisplay( 7 downto  4) < 10) else resize(LBAdisplay( 7 downto  4), 8) + 16#37#;
+   lbatext(23 downto 16) <= resize(LBAdisplay(11 downto  8), 8) + 16#30# when (LBAdisplay(11 downto  8) < 10) else resize(LBAdisplay(11 downto  8), 8) + 16#37#;
    lbatext(31 downto 24) <= resize(LBAdisplay(15 downto 12), 8) + 16#30# when (LBAdisplay(15 downto 12) < 10) else resize(LBAdisplay(15 downto 12), 8) + 16#37#;
    lbatext(39 downto 32) <= resize(LBAdisplay(19 downto 16), 8) + 16#30# when (LBAdisplay(19 downto 16) < 10) else resize(LBAdisplay(19 downto 16), 8) + 16#37#;
-   lbatext(47 downto 40) <= resize(LBAdisplay(23 downto 20), 8) + 16#30# when (LBAdisplay(23 downto 20) < 10) else resize(LBAdisplay(23 downto 20), 8) + 16#37#;
-   lbatext(55 downto 48) <= resize(LBAdisplay(27 downto 24), 8) + 16#30# when (LBAdisplay(27 downto 24) < 10) else resize(LBAdisplay(27 downto 24), 8) + 16#37#;
-   lbatext(63 downto 56) <= resize(LBAdisplay(31 downto 28), 8) + 16#30# when (LBAdisplay(31 downto 28) < 10) else resize(LBAdisplay(31 downto 28), 8) + 16#37#;
    
    ioverlayLBA : entity work.gpu_overlay
    generic map
    (
-      COLS                   => 8,
+      COLS                   => 5,
       BACKGROUNDON           => '1',
       RGB_BACK               => x"FFFFFF",
       RGB_FRONT              => x"0000FF",

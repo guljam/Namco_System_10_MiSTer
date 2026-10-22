@@ -54,12 +54,7 @@ module s10_atapi #(
     input  wire [15:0] sd_buff_dout,
     input  wire        sd_buff_wr,
     input  wire        img_mounted,
-    input  wire [63:0] img_size,
-
-    // diagnostic: a read command was accepted (one clock), with its start sector and length
-    output reg         dbg_go = 1'b0,
-    output reg  [31:0] dbg_lba = 0,
-    output reg  [23:0] dbg_len = 0
+    input  wire [63:0] img_size
 );
     // ================================================================== sector cache: 8 x 2048 bytes
     // entry {slot, e} holds 16-bit words 2e (bits 15:0) and 2e+1 (bits 31:16) of the slot's sector; slot = lba[2:0]
@@ -346,9 +341,7 @@ module s10_atapi #(
             end
 
             // ---- execute a received packet
-            dbg_go <= 1'b0;
             if (pkt_go) begin
-                if (p_read && disc && p_len != 0) begin dbg_go <= 1'b1; dbg_lba <= p_lba; dbg_len <= p_len; end
                 if (p_read && !disc)       complete(1'b1, 8'h24);                       // NOT READY, ABRT
                 else if (!p_read || p_len == 0) complete(1'b0, 8'h00);
                 else begin
