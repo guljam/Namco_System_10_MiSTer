@@ -73,6 +73,9 @@ set_global_assignment -name VERILOG_MACRO "MISTER_DISABLE_ALSA=1"
 # smaller scaler line buffers (System 10 output is at most 640x480): eases HDMI timing
 set_global_assignment -name VERILOG_MACRO "MISTER_SMALL_VBUF=1"
 
+# after a full compile, copy output_files/Namco_S10.rbf to Releases/Namco_S10_YYYYMMDD.rbf
+set_global_assignment -name POST_FLOW_SCRIPT_FILE "quartus_sh:scripts/release_rbf.tcl"
+
 
 source sys/sys.tcl
 source sys/sys_analog.tcl

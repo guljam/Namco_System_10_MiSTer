@@ -24,3 +24,7 @@ sim/*/build*/
 sim/board/*.log
 sim/system/tb_s10.vhd
 __pycache__/
+sim/gpu/tb_gpu.vhd
+sim/gpu/libprof/
+sim/gpu/*_title.txt
+sim/system/*.log
