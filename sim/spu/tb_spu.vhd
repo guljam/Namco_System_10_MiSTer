@@ -9,7 +9,11 @@ use ieee.std_logic_textio.all;
 library psx;
 
 entity tb_spu is
-   generic (TEND : integer := 0);       -- stop at this CPU cycle (0 = end of the event file)
+   generic (
+      TEND   : integer := 0;      -- stop at this CPU cycle (0 = end of the event file)
+      TSTART : integer := 0;      -- events before this cycle are applied back to back (fast-forward to the window)
+      DLAT   : integer := 4       -- DDR3 ack latency in clk2x (large = SPU RAM waiting behind the GPU on hardware)
+   );
 end entity;
 
 architecture sim of tb_spu is
@@ -78,7 +82,7 @@ begin
       wait until rising_edge(clk2x);
       if mem_request = '1' then
          a := to_integer(unsigned(mem_ADDR(18 downto 3)));
-         for i in 1 to 4 loop wait until rising_edge(clk2x); end loop;
+         for i in 1 to DLAT loop wait until rising_edge(clk2x); end loop;
          mem_ack <= '1';
          wait until rising_edge(clk2x);
          mem_ack <= '0';
@@ -96,6 +100,26 @@ begin
             mem_rdy <= '0';
             wait until rising_edge(clk2x);
          end if;
+      end if;
+   end process;
+
+   -- output energy per 10 ms of SPU time: mean |L| + |R| (energy.txt: cycle, energy)
+   process
+      file fo : text open write_mode is "energy.txt";
+      variable l : line;
+      variable acc : integer := 0;
+      variable k : integer := 0;
+      variable smax : integer := 0;
+      alias stash is << signal .tb_spu.ispu.stashedSamples : integer >>;
+   begin
+      wait until rising_edge(clk1x);
+      acc := acc + abs(to_integer(signed(snd_l))) / 64 + abs(to_integer(signed(snd_r))) / 64;
+      if stash > smax then smax := stash; end if;
+      k := k + 1;
+      if k = 338688 then
+         -- cycle, mean output, max stashed samples (SPU behind) in the window
+         write(l, cyc); write(l, string'(" ")); write(l, acc / 5292); write(l, string'(" ")); write(l, smax); writeline(fo, l);
+         acc := 0; k := 0; smax := 0;
       end if;
    end process;
 
@@ -120,6 +144,7 @@ begin
       variable w : std_logic_vector(31 downto 0);
       variable h : std_logic_vector(15 downto 0);
       variable nev : integer := 0;
+      variable tbase : integer := 0;
       alias fifo_full is << signal .tb_spu.ispu.FifoIn_Full : std_logic >>;
    begin
       wait for 1 us;
@@ -130,7 +155,14 @@ begin
          readline(f, l);
          read(l, c); read(l, t);
          exit when TEND > 0 and t > TEND;
-         while cyc < t loop wait until rising_edge(clk1x); end loop;
+         if t >= TSTART then
+            if cyc < t - TSTART + tbase then
+               while cyc < t - TSTART + tbase loop wait until rising_edge(clk1x); end loop;
+            end if;
+         else
+            for i in 1 to 64 loop wait until rising_edge(clk1x); end loop;   -- fast-forward: give the SPU time per write
+            tbase := cyc + 64;
+         end if;
          if c = 'W' then
             read(l, r); hread(l, h);
             bus_addr <= to_unsigned(r, 10); bus_dw <= h; bus_wr <= '1';
