@@ -60,11 +60,7 @@
     </rom>
     <rom index="2" zip="taiko4.zip" md5="None" address="0x30800000">
         <part name="tk41vera_0.8e" crc="6dc209b1"/>
-    </rom>
-    <rom index="2" zip="taiko4.zip" md5="None" address="0x31880000">
         <part name="tk41vera_1.8d" crc="0d1731d8"/>
-    </rom>
-    <rom index="2" zip="taiko4.zip" md5="None" address="0x32900000">
         <part name="tk41vera_2.7e" crc="6fc63af0"/>
     </rom>
     <nvram index="9" size="16896"/>

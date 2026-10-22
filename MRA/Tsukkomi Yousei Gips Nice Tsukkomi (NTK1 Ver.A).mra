@@ -58,26 +58,12 @@
     </rom>
     <rom index="2" zip="nicetsuk.zip" md5="None" address="0x30800000">
         <part name="ntk1vera_0.2j" crc="92b60f09"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x31880000">
         <part name="ntk1vera_1.1j" crc="5d5a4ca2"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x32900000">
         <part name="ntk1vera_2.2h" crc="df2ba95f"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x33980000">
         <part name="ntk1vera_3.1h" crc="ee0c6a94"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x34A00000">
         <part name="ntk1vera_4.2f" crc="cf9ad49e"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x35A80000">
         <part name="ntk1vera_5.1f" crc="cf73d26b"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x36B00000">
         <part name="ntk1vera_6.2e" crc="ee63d5ee"/>
-    </rom>
-    <rom index="2" zip="nicetsuk.zip" md5="None" address="0x37B80000">
         <part name="ntk1vera_7.1e" crc="5c8981e4"/>
     </rom>
     <nvram index="9" size="16896"/>

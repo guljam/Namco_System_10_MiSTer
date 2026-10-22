@@ -58,11 +58,7 @@
     </rom>
     <rom index="2" zip="gahaha.zip" md5="None" address="0x30800000">
         <part name="gid2vera_0.8e" crc="d7888ca3"/>
-    </rom>
-    <rom index="2" zip="gahaha.zip" md5="None" address="0x31880000">
         <part name="gid2vera_1.8d" crc="102932a7"/>
-    </rom>
-    <rom index="2" zip="gahaha.zip" md5="None" address="0x32900000">
         <part name="gid2vera_2.7e" crc="df8ec017"/>
     </rom>
     <nvram index="9" size="16896"/>

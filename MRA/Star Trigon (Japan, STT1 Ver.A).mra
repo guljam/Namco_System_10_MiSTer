@@ -58,8 +58,6 @@
     </rom>
     <rom index="2" zip="startrgn.zip" md5="None" address="0x30800000">
         <part name="stt1a_0.bin" crc="1e090644"/>
-    </rom>
-    <rom index="2" zip="startrgn.zip" md5="None" address="0x31880000">
         <part name="stt1a_1.bin" crc="aa527694"/>
     </rom>
     <nvram index="9" size="16896"/>

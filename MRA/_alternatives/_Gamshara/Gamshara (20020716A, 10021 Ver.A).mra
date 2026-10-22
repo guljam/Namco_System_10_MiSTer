@@ -53,8 +53,6 @@
     </rom>
     <rom index="2" zip="gamsharao.zip|gamshara.zip" md5="None" address="0x30800000">
         <part name="10021a.8e" crc="6c0361fc"/>
-    </rom>
-    <rom index="2" zip="gamsharao.zip|gamshara.zip" md5="None" address="0x31880000">
         <part name="10021a.8d" crc="73669ff7"/>
     </rom>
     <nvram index="9" size="16896"/>

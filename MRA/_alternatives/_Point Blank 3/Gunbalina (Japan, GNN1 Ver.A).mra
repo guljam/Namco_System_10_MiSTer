@@ -52,8 +52,6 @@
     </rom>
     <rom index="2" zip="gunbalina.zip|ptblank3.zip" md5="None" address="0x30800000">
         <part name="gnn1a.8e" crc="2371aaba"/>
-    </rom>
-    <rom index="2" zip="gunbalina.zip|ptblank3.zip" md5="None" address="0x31880000">
         <part name="gnn1a.8d" crc="6cd343e0"/>
     </rom>
     <rom index="4" zip="ptblank3.zip" md5="None" address="0x3F800000">

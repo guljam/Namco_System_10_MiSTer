@@ -60,11 +60,7 @@
     </rom>
     <rom index="2" zip="taiko6.zip" md5="None" address="0x30800000">
         <part name="tk61vera_0.8e" crc="a07936c6"/>
-    </rom>
-    <rom index="2" zip="taiko6.zip" md5="None" address="0x31880000">
         <part name="tk61vera_1.8d" crc="288fb1aa"/>
-    </rom>
-    <rom index="2" zip="taiko6.zip" md5="None" address="0x32900000">
         <part name="tk61vera_2.7e" crc="550bb6a1"/>
     </rom>
     <nvram index="9" size="16896"/>

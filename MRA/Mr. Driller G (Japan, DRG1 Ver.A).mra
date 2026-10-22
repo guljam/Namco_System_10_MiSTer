@@ -58,11 +58,7 @@
     </rom>
     <rom index="2" zip="mrdrilrg.zip" md5="None" address="0x30800000">
         <part name="0.8e" crc="4b61ac62"/>
-    </rom>
-    <rom index="2" zip="mrdrilrg.zip" md5="None" address="0x31880000">
         <part name="1.8d" crc="c87b5e86"/>
-    </rom>
-    <rom index="2" zip="mrdrilrg.zip" md5="None" address="0x32900000">
         <part name="2.7e" crc="e0a9339f"/>
     </rom>
     <nvram index="9" size="16896"/>

@@ -52,8 +52,6 @@
     </rom>
     <rom index="2" zip="gamshara.zip" md5="None" address="0x30800000">
         <part name="10021a_e.8e" crc="1413b7d2"/>
-    </rom>
-    <rom index="2" zip="gamshara.zip" md5="None" address="0x31880000">
         <part name="10021a.8d" crc="73669ff7"/>
     </rom>
     <nvram index="9" size="16896"/>

@@ -64,11 +64,7 @@
     </rom>
     <rom index="2" zip="taiko5.zip" md5="None" address="0x30800000">
         <part name="tk51vera_0.8e" crc="e2c9e74a"/>
-    </rom>
-    <rom index="2" zip="taiko5.zip" md5="None" address="0x31880000">
         <part name="tk51vera_1.8d" crc="63ffbcaa"/>
-    </rom>
-    <rom index="2" zip="taiko5.zip" md5="None" address="0x32900000">
         <part name="tk51vera_2.7e" crc="1f419247"/>
     </rom>
     <nvram index="9" size="16896"/>

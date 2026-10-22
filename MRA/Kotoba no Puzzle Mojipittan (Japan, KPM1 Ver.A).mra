@@ -58,11 +58,7 @@
     </rom>
     <rom index="2" zip="knpuzzle.zip" md5="None" address="0x30800000">
         <part name="kpm1vera_0.8e" crc="4b4255da"/>
-    </rom>
-    <rom index="2" zip="knpuzzle.zip" md5="None" address="0x31880000">
         <part name="kpm1vera_1.8d" crc="644595a6"/>
-    </rom>
-    <rom index="2" zip="knpuzzle.zip" md5="None" address="0x32900000">
         <part name="kpm1vera_2.7e" crc="6bf164e5"/>
     </rom>
     <nvram index="9" size="16896"/>

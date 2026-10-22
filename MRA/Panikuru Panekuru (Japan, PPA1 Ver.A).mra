@@ -58,11 +58,7 @@
     </rom>
     <rom index="2" zip="panikuru.zip" md5="None" address="0x30800000">
         <part name="0.8e" crc="a68b0965"/>
-    </rom>
-    <rom index="2" zip="panikuru.zip" md5="None" address="0x31880000">
         <part name="1.8d" crc="18e5135d"/>
-    </rom>
-    <rom index="2" zip="panikuru.zip" md5="None" address="0x32900000">
         <part name="2.7e" crc="cd3b25e0"/>
     </rom>
     <nvram index="9" size="16896"/>

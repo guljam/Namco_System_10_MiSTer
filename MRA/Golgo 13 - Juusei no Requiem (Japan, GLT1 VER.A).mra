@@ -58,20 +58,10 @@
     </rom>
     <rom index="2" zip="g13jnr.zip" md5="None" address="0x30800000">
         <part name="glt1vera_0.2j" crc="24f5bb06"/>
-    </rom>
-    <rom index="2" zip="g13jnr.zip" md5="None" address="0x31880000">
         <part name="glt1vera_1.1j" crc="5ec552da"/>
-    </rom>
-    <rom index="2" zip="g13jnr.zip" md5="None" address="0x32900000">
         <part name="glt1vera_2.2h" crc="0835d6ed"/>
-    </rom>
-    <rom index="2" zip="g13jnr.zip" md5="None" address="0x33980000">
         <part name="glt1vera_3.1h" crc="f7486979"/>
-    </rom>
-    <rom index="2" zip="g13jnr.zip" md5="None" address="0x34A00000">
         <part name="glt1vera_4.2f" crc="e60b526a"/>
-    </rom>
-    <rom index="2" zip="g13jnr.zip" md5="None" address="0x35A80000">
         <part name="glt1vera_5.1f" crc="0cb2df20"/>
     </rom>
     <nvram index="9" size="16896"/>
