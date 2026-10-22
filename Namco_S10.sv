@@ -406,7 +406,7 @@ parameter CONF_STR = {
 	"P3,Hardware;",
 	"P3-;",
 	"P3O[64],Pause when OSD open,Off,On;",
-	"P3O[66:65],Diagnostic readout,Off,Taiko 5 preview,Taiko 6 preview;",
+	"P3O[67:65],Diagnostic readout,Off,Taiko 5 preview,Taiko 6 preview,CD read sector,CD data sum;",
 	"-;",
 	"R0,Reset;",
 	"J1,Button 1,Button 2,Button 3,Button 4,Button 5,Button 6,Start,Coin,Test,Service,Pause;",
@@ -428,6 +428,9 @@ wire [15:0] status_menumask = {10'd0, ~b_nfl, ~b_memp3, ~b_cdrom, ~b_light_gun, 
 wire        forced_scandoubler;
 wire [31:0] sd_lba0;                   // slot 0: CD-ROM image (s10_atapi) or MEM(P3) audio (s10_p3audio)
 wire [31:0] cd_lba, p3_lba;
+wire        cd_dbg_go;                 // diagnostic readout: CD read commands
+wire [31:0] cd_dbg_lba;
+wire [23:0] cd_dbg_len;
 wire  [5:0] p3_blk_cnt;
 wire        p3_sd_rd;
 wire [31:0] sd_lba1 = 0;
@@ -1145,7 +1148,10 @@ s10_atapi s10_atapi
 	.sd_buff_dout (sd_buff_dout),
 	.sd_buff_wr   (sd_buff_wr & ~b_memp3),
 	.img_mounted  (img_mounted[0] & ~b_memp3),
-	.img_size     (img_size)
+	.img_size     (img_size),
+	.dbg_go       (cd_dbg_go),
+	.dbg_lba      (cd_dbg_lba),
+	.dbg_len      (cd_dbg_len)
 );
 
 // Diagnostic readout (OSD Hardware > Diagnostic readout): the game's sound-stream library state (PlayStation SDK
@@ -1156,7 +1162,7 @@ s10_atapi s10_atapi
 // Addresses from the games' code (MAME): Taiko 6 0x800D4C44, Taiko 5 0x800D41A8.
 reg  [7:0]  dbg_state = 0, dbg_mask = 0;
 reg  [3:0]  dbg_n20 = 0, dbg_n21 = 0, dbg_n22 = 0, dbg_n30 = 0;
-wire [26:0] dbg_addr = (status[66:65] == 2'd1) ? 27'h00D41A8 : 27'h00D4C44;
+wire [26:0] dbg_addr = (status[67:65] == 3'd1) ? 27'h00D41A8 : 27'h00D4C44;
 reg         dbg_req_q = 0;
 always @(posedge clk_1x) begin
 	dbg_req_q <= sdram_req;
@@ -1174,7 +1180,24 @@ always @(posedge clk_1x) begin
 		if (sdram_addr == dbg_addr + 27'h10) dbg_mask <= sdr_sdram_din[7:0];
 	end
 end
-wire [31:0] s10_dbg = {dbg_state, dbg_n20, dbg_n22, dbg_n30, dbg_n21, dbg_mask};
+// CD read sector: [31:8] first sector of the latest file read (a read past the directory, sector 27 on, that does not
+// continue the previous one), [7:0] sectors delivered by DMA since (stops at 0x40). CD data sum: [31:8] 24-bit sum of
+// the 32-bit words of those first 64 sectors, [7:0] the same count.
+reg  [31:0] cdb_start = 0, cdb_next = 0, cdb_sum = 0;
+reg  [15:0] cdb_words = 0;            // words delivered since the start (stops at 64 sectors)
+always @(posedge clk_1x) begin
+	if (cd_dbg_go && cd_dbg_lba >= 32'd27) begin
+		cdb_next <= cd_dbg_lba + cd_dbg_len;
+		if (cd_dbg_lba != cdb_next) begin cdb_start <= cd_dbg_lba; cdb_words <= 0; cdb_sum <= 0; end
+	end else if (s12_rdma_pop && cd_dma_now && cd_rdma_valid && cdb_words < 16'd32768) begin
+		cdb_words <= cdb_words + 1'd1;
+		cdb_sum   <= cdb_sum + cd_rdma_data;
+	end
+end
+wire  [7:0] cdb_cnt = {1'b0, cdb_words[15:9]};
+wire [31:0] s10_dbg = (status[67:65] == 3'd3) ? {cdb_start[23:0], cdb_cnt} :
+                      (status[67:65] == 3'd4) ? {cdb_sum[23:0], cdb_cnt} :
+                      {dbg_state, dbg_n20, dbg_n22, dbg_n30, dbg_n21, dbg_mask};
 
 // MiSTer analog axis (signed, -128..127, right/down positive) -> 10-bit ADC value 0..1023 (MAME EXIO_ANALOG
 // PORT_MINMAX(0, 0x3ff); PORT_REVERSE where MAME has it)
@@ -1741,7 +1764,7 @@ psx
    .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata | s10_p3_rdata),
    .s10_stall      (s10_stall | p3_stall),
    .s10_wstall     (p3_wstall),
-   .s10_dbgOn      (status[66:65] != 2'd0),
+   .s10_dbgOn      (status[67:65] != 3'd0),
    .s10_dbg        (s10_dbg),
    .s10_irq10      (s10_irq10),
    .s10_exio       (b_exio_ident != 8'hFF),
