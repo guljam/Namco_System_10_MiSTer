@@ -62,7 +62,11 @@
     </rom>
     <rom index="2" zip="taiko3.zip" md5="None" address="0x30800000">
         <part name="tk31vera_0.8e" crc="54add039"/>
+    </rom>
+    <rom index="2" zip="taiko3.zip" md5="None" address="0x31880000">
         <part name="tk31vera_1.8d" crc="384c9692"/>
+    </rom>
+    <rom index="2" zip="taiko3.zip" md5="None" address="0x32900000">
         <part name="tk31vera_2.7e" crc="904c09ee"/>
     </rom>
     <nvram index="9" size="16896"/>

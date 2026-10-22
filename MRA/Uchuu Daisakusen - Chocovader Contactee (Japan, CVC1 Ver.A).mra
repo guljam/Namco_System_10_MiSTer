@@ -58,9 +58,17 @@
     </rom>
     <rom index="2" zip="chocovdr.zip" md5="None" address="0x30800000">
         <part name="0.8e" crc="330d86d3"/>
+    </rom>
+    <rom index="2" zip="chocovdr.zip" md5="None" address="0x31880000">
         <part name="1.8d" crc="4aecd6fc"/>
+    </rom>
+    <rom index="2" zip="chocovdr.zip" md5="None" address="0x32900000">
         <part name="2.7e" crc="ac212e5a"/>
+    </rom>
+    <rom index="2" zip="chocovdr.zip" md5="None" address="0x33980000">
         <part name="3.7d" crc="907d3d15"/>
+    </rom>
+    <rom index="2" zip="chocovdr.zip" md5="None" address="0x34A00000">
         <part name="4.6e" crc="1ed957dd"/>
     </rom>
     <nvram index="9" size="16896"/>

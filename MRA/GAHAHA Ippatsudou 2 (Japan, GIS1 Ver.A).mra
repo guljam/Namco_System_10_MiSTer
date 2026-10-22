@@ -58,7 +58,11 @@
     </rom>
     <rom index="2" zip="gahaha2.zip" md5="None" address="0x30800000">
         <part name="gis1vera_0.8e" crc="d1e4a8b8"/>
+    </rom>
+    <rom index="2" zip="gahaha2.zip" md5="None" address="0x31880000">
         <part name="gis1vera_1.8d" crc="eeb680ac"/>
+    </rom>
+    <rom index="2" zip="gahaha2.zip" md5="None" address="0x32900000">
         <part name="gis1vera_2.7e" crc="d22c9ee1"/>
     </rom>
     <nvram index="9" size="16896"/>

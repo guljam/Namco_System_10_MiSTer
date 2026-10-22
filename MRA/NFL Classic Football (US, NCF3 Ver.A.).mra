@@ -58,8 +58,14 @@
     </rom>
     <rom index="2" zip="nflclsfb.zip" md5="None" address="0x30800000">
         <part name="0.8e" crc="97ac7216"/>
+    </rom>
+    <rom index="2" zip="nflclsfb.zip" md5="None" address="0x31880000">
         <part name="1.8d" crc="d3f519d8"/>
+    </rom>
+    <rom index="2" zip="nflclsfb.zip" md5="None" address="0x32900000">
         <part name="2.7e" crc="0c65fdc2"/>
+    </rom>
+    <rom index="2" zip="nflclsfb.zip" md5="None" address="0x33980000">
         <part name="3.7d" crc="0a4e601d"/>
     </rom>
     <nvram index="9" size="16896"/>

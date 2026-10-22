@@ -58,8 +58,14 @@
     </rom>
     <rom index="2" zip="gjspace.zip" md5="None" address="0x30800000">
         <part name="10011.8e" crc="c581bca7"/>
+    </rom>
+    <rom index="2" zip="gjspace.zip" md5="None" address="0x31880000">
         <part name="10011.8d" crc="7fb4a3fe"/>
+    </rom>
+    <rom index="2" zip="gjspace.zip" md5="None" address="0x32900000">
         <part name="10011.7e" crc="31bfc843"/>
+    </rom>
+    <rom index="2" zip="gjspace.zip" md5="None" address="0x33980000">
         <part name="10011.7d" crc="15d83649"/>
     </rom>
     <nvram index="9" size="16896"/>

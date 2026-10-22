@@ -58,6 +58,8 @@
     </rom>
     <rom index="2" zip="konotako.zip" md5="None" address="0x30800000">
         <part name="0.8e" crc="63d23a0c"/>
+    </rom>
+    <rom index="2" zip="konotako.zip" md5="None" address="0x31880000">
         <part name="1.8d" crc="bdbed53c"/>
     </rom>
     <nvram index="9" size="16896"/>

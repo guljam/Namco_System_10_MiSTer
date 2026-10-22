@@ -58,18 +58,44 @@
     </rom>
     <rom index="2" zip="squizchs.zip" md5="None" address="0x30800000">
         <part name="chs1vera_0.2j" crc="2e92071c"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x31880000">
         <part name="chs1vera_1.1j" crc="85212a85"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x32900000">
         <part name="chs1vera_2.2h" crc="6a6a1ee7"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x33980000">
         <part name="chs1vera_3.1h" crc="b7ccfaf6"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x34A00000">
         <part name="chs1vera_4.2f" crc="6623029d"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x35A80000">
         <part name="chs1vera_5.1f" crc="5f771c16"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x36B00000">
         <part name="chs1vera_6.2e" crc="840514fd"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x37B80000">
         <part name="chs1vera_7.1e" crc="24c38637"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x38C00000">
         <part name="chs1vera_8.2d" crc="d59d87ec"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x39C80000">
         <part name="chs1vera_9.1d" crc="822532d8"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x3AD00000">
         <part name="chs1vera_10.2c" crc="46752e59"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x3BD80000">
         <part name="chs1vera_11.1c" crc="fc9ed471"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x3CE00000">
         <part name="chs1vera_12.2b" crc="ab786753"/>
+    </rom>
+    <rom index="2" zip="squizchs.zip" md5="None" address="0x3DE80000">
         <part name="chs1vera_13.1b" crc="739e3b1e"/>
     </rom>
     <nvram index="9" size="16896"/>

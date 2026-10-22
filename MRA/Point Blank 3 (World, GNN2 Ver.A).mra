@@ -51,6 +51,8 @@
     </rom>
     <rom index="2" zip="ptblank3.zip" md5="None" address="0x30800000">
         <part name="gnn2vera_0.8e" crc="5ae03e23"/>
+    </rom>
+    <rom index="2" zip="ptblank3.zip" md5="None" address="0x31880000">
         <part name="gnn2vera_1.8d" crc="82d2cfb5"/>
     </rom>
     <rom index="4" zip="ptblank3.zip" md5="None" address="0x3F800000">

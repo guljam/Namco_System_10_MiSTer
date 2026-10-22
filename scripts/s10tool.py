@@ -330,11 +330,14 @@ def mra_text(setname):
         off = MEMN_BIOS_FIRST * MEMN_PAGE
         L += [f"    <rom index=\"0\" zip=\"{zips}\" md5=\"None\">",
               f"        <part name=\"{n0}\" crc=\"{c0}\" offset=\"0x{off:X}\" length=\"0x{(MEMN_BIOS_END - MEMN_BIOS_FIRST) * MEMN_PAGE:X}\"/>",
-              "    </rom>",
-              f"    <rom index=\"2\" zip=\"{zips}\" md5=\"None\" address=\"0x{DDR3_IMG:08X}\">"]
-        for n, c in g["nands"]:
-            L.append(f"        <part name=\"{n}\" crc=\"{c}\"/>")
-        L.append("    </rom>")
+              "    </rom>"]
+        # one <rom> per NAND: Main_MiSTer holds a whole <rom> in Linux RAM before copying it to DDR3, so this
+        # keeps that buffer at one chip (16.5 MB) instead of up to 231 MB (Seishun Quiz)
+        nsz = 0x2100000 if g.get("nand_big") else 0x1080000
+        for k, (n, c) in enumerate(g["nands"]):
+            L += [f"    <rom index=\"2\" zip=\"{zips}\" md5=\"None\" address=\"0x{DDR3_IMG + k * nsz:08X}\">",
+                  f"        <part name=\"{n}\" crc=\"{c}\"/>",
+                  "    </rom>"]
         t2 = g.get("t2") or {}
         if "table" in t2:
             tn, tc, _ = t2["table"]

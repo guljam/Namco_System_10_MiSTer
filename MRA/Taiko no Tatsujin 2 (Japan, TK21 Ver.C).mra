@@ -60,7 +60,11 @@
     </rom>
     <rom index="2" zip="taiko2.zip" md5="None" address="0x30800000">
         <part name="tk21verc_0.8e" crc="f3842791"/>
+    </rom>
+    <rom index="2" zip="taiko2.zip" md5="None" address="0x31880000">
         <part name="tk21verc_1.8d" crc="e294f460"/>
+    </rom>
+    <rom index="2" zip="taiko2.zip" md5="None" address="0x32900000">
         <part name="tk21verc_2.7e" crc="f1dbe387"/>
     </rom>
     <nvram index="9" size="16896"/>
