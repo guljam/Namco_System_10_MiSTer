@@ -20,8 +20,8 @@ table below.
    `_<Game>` folders from [`MRA/_alternatives/`](MRA/_alternatives/) to **`/media/fat/_Arcade/_alternatives/`**.
 3. Put the MAME 0.289 ROM zips in **`/media/fat/games/mame/`** (set names below). Split, merged and non-merged sets
    all work; with split sets, an alternative set also needs its parent's zip.
-4. Create the folder **`/media/fat/games/{mame_rom_name_without_extension}`**, for example **`/media/fat/games/taiko2`**. The Taiko no Tatsujin games and the three MP3 board games
-   need one extra file each (a CD image or an audio file, see below), and they need to go inside their games' named folder in the games folder.
+4. For the MP3 and Taiko games, you'll need to create a folder **`/media/fat/games/{mame_rom_name_without_extension}`** for each of them (for example **`/media/fat/games/taiko2`**). This is unnecessary if you don't plan to play those titles (see list below for games with extra files).
+   They need one extra file each (a CD image or an audio file, see below), and they need to go inside their games' named folder in the /games folder.
 5. Load the game from the **Arcade** menu.
 
 ROMs are not included. You must supply your own.
