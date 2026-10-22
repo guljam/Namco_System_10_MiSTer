@@ -406,6 +406,7 @@ parameter CONF_STR = {
 	"P3,Hardware;",
 	"P3-;",
 	"P3O[64],Pause when OSD open,Off,On;",
+	"P3O[66:65],Diagnostic readout,Off,Taiko 5 preview,Taiko 6 preview;",
 	"-;",
 	"R0,Reset;",
 	"J1,Button 1,Button 2,Button 3,Button 4,Button 5,Button 6,Start,Coin,Test,Service,Pause;",
@@ -1147,6 +1148,34 @@ s10_atapi s10_atapi
 	.img_size     (img_size)
 );
 
+// Diagnostic readout (OSD Hardware > Diagnostic readout): the game's sound-stream library state (PlayStation SDK
+// libspu SpuSt*, used for Taiko no Tatsujin's song previews), snooped from the CPU's main-RAM writes. 8 hex digits:
+//   [31:24] stream state (0x20 prepare, 0x21, 0x22 prepared, 0x30 started, 0x31-0x33 / 0x40 streaming, 0x10 idle)
+//   [23:20] times set to 0x20 (PREPARE)  [19:16] 0x22 (both buffers transferred)  [15:12] 0x30 (START, key on)
+//   [11:8]  times set to 0x21            [7:0]   pending-transfer voice mask (state + 0x10)
+// Addresses from the games' code (MAME): Taiko 6 0x800D4C44, Taiko 5 0x800D41A8.
+reg  [7:0]  dbg_state = 0, dbg_mask = 0;
+reg  [3:0]  dbg_n20 = 0, dbg_n21 = 0, dbg_n22 = 0, dbg_n30 = 0;
+wire [26:0] dbg_addr = (status[66:65] == 2'd1) ? 27'h00D41A8 : 27'h00D4C44;
+reg         dbg_req_q = 0;
+always @(posedge clk_1x) begin
+	dbg_req_q <= sdram_req;
+	if (sdram_req && !dbg_req_q && !sdram_rnw && sdram_be[0]) begin   // once per write request
+		if (sdram_addr == dbg_addr) begin
+			dbg_state <= sdr_sdram_din[7:0];
+			case (sdr_sdram_din[7:0])
+				8'h20: dbg_n20 <= dbg_n20 + 1'd1;
+				8'h21: dbg_n21 <= dbg_n21 + 1'd1;
+				8'h22: dbg_n22 <= dbg_n22 + 1'd1;
+				8'h30: dbg_n30 <= dbg_n30 + 1'd1;
+				default: ;
+			endcase
+		end
+		if (sdram_addr == dbg_addr + 27'h10) dbg_mask <= sdr_sdram_din[7:0];
+	end
+end
+wire [31:0] s10_dbg = {dbg_state, dbg_n20, dbg_n22, dbg_n30, dbg_n21, dbg_mask};
+
 // MiSTer analog axis (signed, -128..127, right/down positive) -> 10-bit ADC value 0..1023 (MAME EXIO_ANALOG
 // PORT_MINMAX(0, 0x3ff); PORT_REVERSE where MAME has it)
 function automatic [9:0] ax10(input [7:0] a, input rev);
@@ -1712,6 +1741,8 @@ psx
    .s10_rdata      (s10_io_rdata | s10_mem_rdata | s10_cd_rdata | s10_exio_rdata | s10_p3_rdata),
    .s10_stall      (s10_stall | p3_stall),
    .s10_wstall     (p3_wstall),
+   .s10_dbgOn      (status[66:65] != 2'd0),
+   .s10_dbg        (s10_dbg),
    .s10_irq10      (s10_irq10),
    .s10_exio       (b_exio_ident != 8'hFF),
    .s10_gun_cross  ({b_light_gun & status[121] & ~b_memp3, b_light_gun & status[121]}),   // Golgo 13: P1 only

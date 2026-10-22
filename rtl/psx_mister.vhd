@@ -330,6 +330,8 @@ entity psx_mister is
       s10_rdata       : in  std_logic_vector(31 downto 0) := (others => '0');
       s10_stall       : in  std_logic := '0';
       s10_wstall      : in  std_logic := '0';
+      s10_dbgOn       : in  std_logic := '0';
+      s10_dbg         : in  unsigned(31 downto 0) := (others => '0');
       s10_irq10       : in  std_logic := '0';
       s10_ddr_request : in  std_logic := '0';
       s10_ddr_ack     : out std_logic := '0';
@@ -797,6 +799,8 @@ begin
       s10_rdata       => s10_rdata,
       s10_stall       => s10_stall,
       s10_wstall      => s10_wstall,
+      s10_dbgOn       => s10_dbgOn,
+      s10_dbg         => s10_dbg,
       s10_irq10       => s10_irq10,
       s10_ddr_request => s10_ddr_request,
       s10_ddr_ack     => s10_ddr_ack,

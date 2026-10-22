@@ -68,7 +68,7 @@ entity gpu is
       errorCode            : in  unsigned(3 downto 0);
       
       LBAOn                : in  std_logic;
-      LBAdisplay           : in  unsigned(19 downto 0);
+      LBAdisplay           : in  unsigned(31 downto 0);
       
       errorLINE            : out std_logic;
       errorRECT            : out std_logic;

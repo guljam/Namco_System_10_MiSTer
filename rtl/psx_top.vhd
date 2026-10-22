@@ -286,6 +286,8 @@ entity psx_top is
       s10_rdata       : in  std_logic_vector(31 downto 0) := (others => '0');
       s10_stall       : in  std_logic := '0';
       s10_wstall      : in  std_logic := '0';   -- hold the CPU after a board write until the board can take more
+      s10_dbgOn       : in  std_logic := '0';   -- System 10 diagnostic readout (8 hex digits, top left)
+      s10_dbg         : in  unsigned(31 downto 0) := (others => '0');
       s10_irq10       : in  std_logic := '0';   -- I/O interrupt (PS1 IRQ10), rising edge
       -- System 10 MEM board DDR3 client (clk2x; byte address relative to DDR3 0x30000000)
       s10_ddr_request : in  std_logic := '0';
@@ -669,6 +671,8 @@ architecture arch of psx_top is
    signal dma_dbg_channel        : unsigned(2 downto 0);
    signal mips_pc_dbg            : std_logic_vector(31 downto 0);
    signal s12_readout            : unsigned(19 downto 0);
+   signal readoutOn              : std_logic;
+   signal readoutValue           : unsigned(31 downto 0);
    signal s12_dmadigit           : unsigned(3 downto 0);
    
    signal errorCD                : std_logic;
@@ -1847,6 +1851,8 @@ begin
    zn_dbg_mipspc <= mips_pc_dbg;
    s12_dmadigit  <= x"F" when dma_dbg_active = '0' else ('0' & dma_dbg_channel);
    s12_readout   <= s12_dmadigit & unsigned(mips_pc_dbg(17 downto 2));
+   readoutOn     <= LBAOn or s10_dbgOn;
+   readoutValue  <= s10_dbg when s10_dbgOn = '1' else resize(s12_readout, 32);
 
    idma : entity work.dma
    port map
@@ -2180,8 +2186,8 @@ begin
       errorEna             => errorEna, 
       errorCode            => errorCode,
       
-      LBAOn                => LBAOn,
-      LBAdisplay           => s12_readout,
+      LBAOn                => readoutOn,
+      LBAdisplay           => readoutValue,
       
       errorLINE            => errorLINE,
       errorRECT            => errorRECT,
