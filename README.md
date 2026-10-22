@@ -45,12 +45,12 @@ ROMs are not included. You must supply your own.
 | Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A) | `g13jnr` | 2001 | MEM(P3) MP3 board | `g13jnr.p3a` | Tested working (GunCon 2) |
 | Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A) | `nicetsuk` | 2002 | MEM(P3) MP3 board | `nicetsuk.p3a` | Tested working |
 | Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | MEM(P3) MP3 board | `squizchs.p3a` | Tested working |
-| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | MEM(N) + EXIO + trackballs | | Tested working (not working in MAME) |
+| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | MEM(N) + EXIO + trackballs | | Tested working |
 | Taiko no Tatsujin 2 (Japan, TK21 Ver.C) | `taiko2` | 2001 | MEM(N) + EXIO + CD-ROM | `nm-002.bin` | Tested working |
 | Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | `nm-003.bin` | Mild graphical issue on the opening attract screen, a vertical band of coloured pixels to the right side of the play field, neither affect gameeplay |
 | Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2002 | MEM(N) + EXIO + CD-ROM | `tk-41.bin` | Tested working |
-| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | `tk-5.bin` | Sometimes previews don't play on song select; sometimes songs don't play after choosing them |
-| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-6.bin` | Sometimes previews don't play on song select; sometimes songs don't play after choosing them |
+| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | `tk-5.bin` | Tested working |
+| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-6.bin` | Tested working |
 | Taiko no Tatsujin RT: Nippon no Kokoro (Japan, TKN1 Ver.A) | `taikort` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-n.bin` | Tested working |
 
 MAME marks the Taiko games and NFL Classic Football as not working; all of them play on this core.
