@@ -418,7 +418,7 @@ wire [127:0] status;
 // Bit 0 hides the Light Gun OSD page (H0 prefix) for every game whose MRA does
 // not declare itself a gun game — light-gun support must not be offered to
 // games that don't natively have it.
-wire        b_light_gun, b_cdrom, b_exio_mcu, b_exio_analog, b_memp3;
+wire        b_light_gun, b_cdrom, b_exio_mcu, b_exio_analog, b_memp3, b_edge_mask;
 wire  [3:0] b_in1_layout;
 // H1: CRT Adjust items hidden while Off; H2: Light Gun page, gun games only; H3: Mount CD, CD games only;
 // H4: Mount audio, MEM(P3) games only; H5: Trackball page, NFL Classic Football only
@@ -677,6 +677,7 @@ s10_loader #(.BIOS_SDRAM(BIOS_START), .IMG_BASE(IMG_BASE), .NL_OFF(NL_OFF)) s10_
 	.exio_mcu      (b_exio_mcu),
 	.exio_analog   (b_exio_analog),
 	.memp3         (b_memp3),
+	.edge_mask     (b_edge_mask),
 	.in1_layout    (b_in1_layout),
 	.nl_bits       (b_nl_bits),
 	.record_ok     (b_record_ok),
@@ -1452,7 +1453,7 @@ psx
    .rotate180(orient_flip180),
    .fixedVBlank(1'b0),
    .vCrop(2'b00),
-   .hCrop(1'b0),
+   .hCrop(b_edge_mask),  // Taiko 3: hide its scratch pixels right of the 320-wide frame buffer (display starts at x=2)
    .SPUon(1'b1),
    .SPUIRQTrigger(1'b0),
    .SPUSDRAM(1'b0),

@@ -779,7 +779,9 @@ begin
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');
-                     elsif (videoout_settings.hCrop = '1' and xCount >= videoout_out.DisplayWidth) then
+                     -- hCrop: blank pixels whose VRAM x is past the frame buffer width (System 10: Taiko 3 shows
+                     -- VRAM x 2..321 and keeps scratch data at x >= 320; MAME shows it as a coloured right edge)
+                     elsif (videoout_settings.hCrop = '1' and xCount + to_integer(videoout_out.DisplayOffsetX) >= videoout_out.DisplayWidth) then
                         videoout_out.r      <= (others => '0');
                         videoout_out.g      <= (others => '0');
                         videoout_out.b      <= (others => '0');

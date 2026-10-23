@@ -150,7 +150,7 @@ GAMES = {
                       nands=[("tk21verc_0.8e", "f3842791"), ("tk21verc_1.8d", "e294f460"), ("tk21verc_2.7e", "f1dbe387")],
                       perm=(0xc, 0xd, 0xe, 0xf, 0x9, 0x8, 0xb, 0xa, 0x6, 0x4, 0x7, 0x5, 0x2, 0x3, 0x0, 0x1)),
     "taiko3":    dict(name="Taiko no Tatsujin 3 (Japan, TK31 Ver.A)", parent=None, region="Japan", year=2002,
-                      family="taiko_family", t2=ns10crypt.TAIKO3, disc="nm-003",
+                      family="taiko_family", t2=ns10crypt.TAIKO3, disc="nm-003", edge_mask=True,
                       nands=[("tk31vera_0.8e", "54add039"), ("tk31vera_1.8d", "384c9692"), ("tk31vera_2.7e", "904c09ee")],
                       perm=(0xe, 0xc, 0xf, 0xd, 0xa, 0x9, 0x8, 0xb, 0x4, 0x5, 0x6, 0x7, 0x0, 0x1, 0x3, 0x2)),
     "taiko4":    dict(name="Taiko no Tatsujin 4 (Japan, TK41 Ver.A)", parent=None, region="Japan", year=2002,
@@ -249,7 +249,7 @@ def record(setname):
     t2 = g.get("t2")
     r[27] = ((1 if t2 and "table" in t2 else 0) | (2 if g.get("gun") else 0) |
              (4 if g.get("cdrom") else 0) | (8 if g.get("exio_mcu") else 0) | (16 if g.get("exio_analog") else 0) |
-             (32 if g.get("memp3") else 0))
+             (32 if g.get("memp3") else 0) | (64 if g.get("edge_mask") else 0))
     struct.pack_into("<I", r, 28, g["save_base"])
     if t2:
         for j in range(16):

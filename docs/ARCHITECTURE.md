@@ -198,6 +198,7 @@ Little-endian, written by `scripts/romtool.py` from a per-game table that mirror
 | 8 | 2 | data XOR (0xAAAA) |
 | 10 | 16 | unscramble permutation: source bit for each output bit 15..0 |
 | 26 | 1 | EXIO ident (0xFF none) |
+| 27 | 1 | flags: bit 0 nonlinear table, 1 light gun, 2 CD-ROM, 3 EXIO MCU, 4 EXIO analog, 5 MEM(P3), 6 blank columns past the frame buffer width (Taiko 3) |
 | 32 | 128 | type 2: eMask[16] (8 bytes each) |
 | 160 | 128 | dMask[16] |
 | 288 | 2 | xMask |

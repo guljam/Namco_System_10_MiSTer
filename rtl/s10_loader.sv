@@ -45,6 +45,7 @@ module s10_loader #(
     output wire         exio_mcu,           // record byte 27 bit 3: EXIO board with microcontroller (high-level)
     output wire         exio_analog,        // record byte 27 bit 4: EXIO ADC = analog sticks, GAHAHA IN1 layout
     output wire         memp3,              // record byte 27 bit 5: MEM(P3) board (MCU RAM window, MP3 audio)
+    output wire         edge_mask,          // record byte 27 bit 6: blank picture columns past the frame buffer width
     output wire   [3:0] in1_layout,         // record byte 7 bits 7-4: IN1 layout (0 standard, 1 Golgo 13, 2 Nice
                                             // Tsukkomi, 3 Seishun Quiz)
     output wire [20:0]  nl_bits,            // record bytes 460-463: table length in bits
@@ -100,6 +101,7 @@ module s10_loader #(
     assign exio_mcu    = rec[8*27 + 3];
     assign exio_analog = rec[8*27 + 4];
     assign memp3       = rec[8*27 + 5];
+    assign edge_mask   = rec[8*27 + 6];
     assign save_base   = rec[8*28 +: 28];
     assign nl_bits     = nlb[20:0];
 

@@ -378,6 +378,8 @@ begin
       variable skip     : std_logic; 
       variable uFilter  : unsigned(10 downto 0);
       variable vFilter  : unsigned(10 downto 0);
+      variable cvo      : integer range 0 to 2;
+      variable p0, p1, p2 : integer range 0 to 2;
    begin
       if rising_edge(clk2x) then
          
@@ -599,27 +601,32 @@ begin
                when SORTVERTICES =>
                   state     <= CALCBOUNDARY1;
                   firsthalf <= '1';
-                  if (vt(0).y <= vt(2).y and vt(2).y <= vt(1).y) then -- 0 2 1
-                     vt(0) <= vt(0);
-                     vt(1) <= vt(2);
-                     vt(2) <= vt(1);
-                  elsif (vt(1).y <= vt(0).y and vt(0).y <= vt(2).y) then -- 1 0 2
-                     vt(0) <= vt(1);
-                     vt(1) <= vt(0);
-                     vt(2) <= vt(2);
-                  elsif (vt(1).y <= vt(2).y and vt(2).y <= vt(0).y) then -- 1 2 0
-                     vt(0) <= vt(1);
-                     vt(1) <= vt(2);
-                     vt(2) <= vt(0);
-                  elsif (vt(2).y <= vt(0).y and vt(0).y <= vt(1).y) then -- 2 0 1
-                     vt(0) <= vt(2);
-                     vt(1) <= vt(0);
-                     vt(2) <= vt(1);
-                  elsif (vt(2).y <= vt(1).y and vt(1).y <= vt(0).y) then -- 2 1 0
-                     vt(0) <= vt(2);
-                     vt(1) <= vt(1);
-                     vt(2) <= vt(0);
-                  end if; -- 0 1 2 requires no resorting
+                  -- core vertex (the one the interpolants are based on): chosen in the ORIGINAL vertex order and
+                  -- carried through the sort, then a stable sort by y (swap only on a strict <), as Mednafen /
+                  -- hardware. Choosing it after an unstable sort picked the other vertex of a tie: Taiko 3's
+                  -- full-screen fade quad (two vertices at the same x and y) then sampled the next texel row
+                  -- in its bottom 16 lines (a coloured bar under the namco logo).
+                  if (vt(1).x <= vt(0).x) then
+                     if (vt(2).x <= vt(1).x) then cvo := 2; else cvo := 1; end if;
+                  elsif (vt(2).x < vt(0).x) then
+                     cvo := 2;
+                  else
+                     cvo := 0;
+                  end if;
+                  if    (vt(0).y <= vt(1).y and vt(1).y <= vt(2).y) then p0 := 0; p1 := 1; p2 := 2;
+                  elsif (vt(0).y <= vt(2).y and vt(2).y <  vt(1).y) then p0 := 0; p1 := 2; p2 := 1;
+                  elsif (vt(1).y <  vt(0).y and vt(0).y <= vt(2).y) then p0 := 1; p1 := 0; p2 := 2;
+                  elsif (vt(1).y <= vt(2).y and vt(2).y <  vt(0).y) then p0 := 1; p1 := 2; p2 := 0;
+                  elsif (vt(2).y <  vt(0).y and vt(0).y <= vt(1).y) then p0 := 2; p1 := 0; p2 := 1;
+                  else                                                   p0 := 2; p1 := 1; p2 := 0;
+                  end if;
+                  vt(0) <= vt(p0);
+                  vt(1) <= vt(p1);
+                  vt(2) <= vt(p2);
+                  if    (p0 = cvo) then coreVertex <= 0; vo <= 0; vp <= 0;
+                  elsif (p1 = cvo) then coreVertex <= 1; vo <= 1; vp <= 0;
+                  else                  coreVertex <= 2; vo <= 1; vp <= 1;
+                  end if;
                   
                   if (vt(0).u >= vt(1).u and vt(0).u >= vt(2).u) then 
                      filter_maxU <= vt(0).u; 
@@ -647,22 +654,6 @@ begin
                      targetTiming <= targetTiming + (vt(2).y + 1 - vt(0).y) * xMax * 4;
                   else
                      targetTiming <= targetTiming + (vt(2).y + 1 - vt(0).y) * xMax * 2;
-                  end if;
-                  
-                  coreVertex <= 0;
-                  vo         <= 0;
-                  vp         <= 0;
-                  if (vt(1).x <= vt(0).x) then
-                     coreVertex <= 1;
-                     vo         <= 1;
-                     if(vt(2).x <= vt(1).x) then
-                        coreVertex <= 2;
-                        vp         <= 1;
-                     end if;
-                  elsif (vt(2).x < vt(0).x) then
-                     coreVertex <= 2;
-                     vo         <= 1;
-                     vp         <= 1;
                   end if;
                   
                   denom <= ((vt(1).x - vt(0).x) * (vt(2).y - vt(1).y)) - ((vt(2).x - vt(1).x) * (vt(1).y - vt(0).y));
