@@ -1,5 +1,7 @@
 # Namco System 10 for MiSTer
 
+<img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/de94939c-fd12-4928-ad29-33867efa7ab5" /> <img width="320" height="240" alt="image" src="https://github.com/user-attachments/assets/4e74a50b-ad78-430b-bef4-282cc459e40a" />
+
 A MiSTer FPGA core for Namco's **System 10** arcade board (2000-2004), the PlayStation-based platform behind
 **Mr. Driller 2**, **Mr. Driller G**, **Point Blank 3**, **Gamshara**, **Taiko no Tatsujin**, **Golgo 13** and more.
 One core (`Namco_S10`) runs every supported game; each game has its own MRA.
@@ -18,8 +20,8 @@ table below.
    `_<Game>` folders from [`MRA/_alternatives/`](MRA/_alternatives/) to **`/media/fat/_Arcade/_alternatives/`**.
 3. Put the MAME 0.289 ROM zips in **`/media/fat/games/mame/`** (set names below). Split, merged and non-merged sets
    all work; with split sets, an alternative set also needs its parent's zip.
-4. Create the folder **`/media/fat/games/{mame_rom_name_without_extension}`**, for example **`/media/fat/games/taiko2`**. The Taiko no Tatsujin games and the three MP3 board games
-   need one extra file each (a CD image or an audio file, see below), and they need to go inside their games' named folder in the games folder.
+4. For the MP3 and Taiko games, you'll need to create a folder **`/media/fat/games/{mame_rom_name_without_extension}`** for each of them (for example **`/media/fat/games/taiko2`**). This is unnecessary if you don't plan to play those titles (see list below for games with extra files).
+   They need one extra file each (a CD image or an audio file, see below), and they need to go inside their games' named folder in the /games folder.
 5. Load the game from the **Arcade** menu.
 
 ROMs are not included. You must supply your own.
@@ -43,12 +45,12 @@ ROMs are not included. You must supply your own.
 | Golgo 13: Juusei no Requiem (Japan, GLT1 VER.A) | `g13jnr` | 2001 | MEM(P3) MP3 board | `g13jnr.p3a` | Tested working (GunCon 2) |
 | Tsukkomi Yousei Gips Nice Tsukkomi (NTK1 Ver.A) | `nicetsuk` | 2002 | MEM(P3) MP3 board | `nicetsuk.p3a` | Tested working |
 | Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | MEM(P3) MP3 board | `squizchs.p3a` | Tested working |
-| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | MEM(N) + EXIO + trackballs | | Tested working (not working in MAME) |
+| NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | MEM(N) + EXIO + trackballs | | Tested working |
 | Taiko no Tatsujin 2 (Japan, TK21 Ver.C) | `taiko2` | 2001 | MEM(N) + EXIO + CD-ROM | `nm-002.bin` | Tested working |
-| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | `nm-003.bin` | Mild graphical issue on the opening attract screen, a vertical band of coloured pixels to the right side of the play field, neither affect gameeplay |
+| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | `nm-003.bin` | Mild graphical issue on the opening attract screen, a vertical band of coloured pixels to the right side of the play field, neither affect gameplay |
 | Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2002 | MEM(N) + EXIO + CD-ROM | `tk-41.bin` | Tested working |
-| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | `tk-5.bin` | Sometimes previews don't play on song select; songs work fine when picked |
-| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-6.bin` | Sometimes previews don't play on song select; songs work fine when picked |
+| Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | `tk-5.bin` | Tested working |
+| Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-6.bin` | Tested working |
 | Taiko no Tatsujin RT: Nippon no Kokoro (Japan, TKN1 Ver.A) | `taikort` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-n.bin` | Tested working |
 
 MAME marks the Taiko games and NFL Classic Football as not working; all of them play on this core.
