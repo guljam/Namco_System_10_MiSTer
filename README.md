@@ -236,12 +236,13 @@ the SD card as a `.nvm` file shortly after the game writes it. On the very first
 
 The games choose their own resolution, exactly as on the PCB: most run at 240p, while Mr. Driller G, Gamshara,
 Kono e Tako and Star Trigon draw some or all of their screens at 640x480 interlaced (480i). Mr. Driller G's service
-menu can switch the game to 240p.
+menu can switch the game to 240p. On HDMI the scaler weaves the two 480i fields into a full 480-line picture (with
+Scandoubler Fx set to None; the scandoubled image is line-doubled per field).
 
 System 10 is a PlayStation running 1.5x faster: the CPU and the sound chip run from 101.4912 MHz / 2
 (50.7456 MHz) instead of the PlayStation's 33.8688 MHz, while the video timing is the PlayStation's. The core
-matches that: the sound chip runs at the board's **66.15 kHz** sample rate, the CPU makes up the board's speed with
-turbo and cache modes (it is clocked at 33.8688 MHz), and the video runs at **59.82 Hz** (240p) / 59.94 Hz (480i). Inputs, including the Taiko drums, are read live by the game at every
+matches that: the sound chip runs at the board's **66.15 kHz** sample rate, the CPU approximates the board's speed with
+the PSX core's turbo modes and a full-rate data cache (it is clocked at 33.8688 MHz), and the video runs at **59.82 Hz** (240p) / 59.94 Hz (480i). Inputs, including the Taiko drums, are read live by the game at every
 poll; nothing is buffered.
 
 MiSTer's HDMI output runs at a fixed 60 Hz by default, which repeats one frame about every 6 seconds at 240p. That
@@ -293,7 +294,8 @@ decoder. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 * Built on Robert Peip's [PSX_MiSTer](https://github.com/MiSTer-devel/PSX_MiSTer) (CPU, GTE, GPU, SPU, MDEC, DMA), and the author's Namco System 12 (Tenkomori Shooting) and Konami GV cores.
 * Thanks to guljam's [System 10 beta core](https://github.com/guljam/namco-system-10-mister-core-beta), whose
   development notes pointed out the 480i GPU throughput problem and Star Trigon's sound-upload
-  stall; the implementations here are this core's own.
+  stall, and whose review of this core found the HDMI 480i field and the Mr. Driller 2 / G CPU-time issue (full-rate
+  cache with a longer VSync() timeout); the implementations here are this core's own.
 * New for System 10: the MEM board (MEM(M) flash and mask ROMs, MEM(N) NAND), the KEYCUS
   descrambler and decrypters (type 1, type 2, type 2 with the nonlinear table or several nonlinear terms), the
   main-board I/O, the EXIO(G) light-gun board, the EXIO board with its microcontroller (drums, analog levers, NFL's
