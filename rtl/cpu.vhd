@@ -396,6 +396,7 @@ architecture arch of cpu is
    signal decOP                        : unsigned(5 downto 0);
    signal decFunct                     : unsigned(5 downto 0);
    signal decShamt                     : unsigned(4 downto 0);
+   signal vsync_fix                    : std_logic;
    signal decRD                        : unsigned(4 downto 0);
    signal decTarget                    : unsigned(4 downto 0);
    signal decJumpTarget                : unsigned(25 downto 0);
@@ -1254,6 +1255,14 @@ begin
    decOP         <= opcodeCacheMuxed(31 downto 26);
    decFunct      <= opcodeCacheMuxed(5 downto 0);
    decShamt      <= opcodeCacheMuxed(10 downto 6);
+
+   -- System 10: PSY-Q libetc VSync() waits for VBlank in v_wait with an iteration timeout, "sll a1,a1,15" (32768 loops,
+   -- about 10 % spare per field at the board's 50.7 MHz CPU). With the full-rate data cache the loop runs faster than on
+   -- the board, so the timeout can expire before VBlank and the game flips the display mid-field. While that cache is on,
+   -- this sll executes with shift 16 (twice the timeout; a real VBlank always ends the wait first). Matched as v_wait's
+   -- own prologue, "addiu sp,sp,-32" then "sll a1,a1,15": every System 10 set has exactly this pair in v_wait (MAME RAM
+   -- dumps of all 26 sets); Point Blank 3 / Gunbalina and Taiko 2 also use "sll a1,a1,15" elsewhere, never after it.
+   vsync_fix     <= '1' when (TURBO_CACHE = '1' and TURBO_CACHE50 = '0' and opcodeCacheMuxed = x"00052BC0" and opcode1 = x"27BDFFE0") else '0';
    decRD         <= opcodeCacheMuxed(15 downto 11);
    decTarget     <= opcodeCacheMuxed(20 downto 16) when (opcodeCacheMuxed(31 downto 26) > 0) else opcodeCacheMuxed(15 downto 11);                 
                
@@ -1485,6 +1494,7 @@ begin
                   decodeOP         <= decOP;
                   decodeFunct      <= decFunct;     
                   decodeShamt      <= decShamt;     
+                  if (vsync_fix = '1') then decodeShamt <= to_unsigned(16, 5); end if;
                   decodeRD         <= decRD;        
                   decodeTarget     <= decTarget;    
                                      

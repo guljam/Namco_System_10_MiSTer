@@ -178,7 +178,7 @@ module emu
 );
 
 assign HDMI_FREEZE = 1'b0;
-assign HDMI_BOB_DEINT = status[41];
+assign HDMI_BOB_DEINT = 1'b0;   // weave only: ascal's bob read-address path does not fit the HDMI clock
 
 assign ADC_BUS  = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -931,12 +931,13 @@ always @(posedge clk_1x) begin
 
    // System 10's CXD8606 runs from 101.4912 MHz / 2 = 50.7456 MHz (MAME CXD8606BQ at 101.4912 MHz, internal
    // /2), 1.5x the PlayStation. The core clocks the CPU at 33.8688 MHz and makes up the speed with the
-   // System 12 turbo/cache modes (as the Tenkomori Shooting core, 50 MHz CXD8661R): faster memory access,
-   // no compute stalls, data cache (half rate).
+   // PSX core's turbo modes: faster memory access, no compute stalls, full-rate data cache. The half-rate cache
+   // left Mr. Driller 2 / G short of CPU time in the 13-column stages (stutter); the full rate makes the PSY-Q VSync()
+   // wait loop faster than on the board, which rtl/cpu.vhd compensates (vsync_fix).
    TURBO_MEM      <= 1'b1;
    TURBO_COMP     <= 1'b1;
    TURBO_CACHE    <= 1'b1;
-   TURBO_CACHE50  <= 1'b1;
+   TURBO_CACHE50  <= 1'b0;
 
 end
 
@@ -2325,7 +2326,9 @@ video_mixer #(.LINE_LENGTH(768), .HALF_DEPTH(0), .GAMMA(1)) video_mixer
 	.VGA_DE(vm_de)
 );
 assign VGA_DE = vm_de;
-assign VGA_F1 = 1'b0;
+// interlace field to the HDMI scaler, so it weaves 480i into 480 lines; the scandoubled
+// signal is progressive, so no field then
+assign VGA_F1 = sd_enable ? 1'b0 : video_aspect.interlace;
 assign VGA_SL = sd_sl;
 
 wire [1:0] ar = status[33:32];
