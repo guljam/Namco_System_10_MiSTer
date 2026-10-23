@@ -10,8 +10,7 @@ I created this core because I wanted to play these games on my MiSTer FPGA. I am
 it for everyone to enjoy and give feedback/make improvements. This core was created with the assistance of AI
 tooling.
 
-**Status: beta.** Every System 10 game other than Taiko no Tatsujin (1; the first iteration) and the medal/punching bag games games is working: 22 games and 4 alternative sets. All the main games have been tested on MiSTer hardware; the couple of known issues are listed in the
-table below.
+**Status: beta.** Every System 10 game other than Taiko no Tatsujin (1; the first iteration) and the medal/punching bag games games is working: 22 games and 4 alternative sets. All the main games have been tested on MiSTer hardware, with no known issues.
 
 ## Quick start
 
@@ -47,7 +46,7 @@ ROMs are not included. You must supply your own.
 | Seishun-Quiz Colorful High School (CHS1 Ver.A) | `squizchs` | 2003 | MEM(P3) MP3 board | `squizchs.p3a` | Tested working |
 | NFL Classic Football (US, NCF3 Ver.A.) | `nflclsfb` | 2003 | MEM(N) + EXIO + trackballs | | Tested working |
 | Taiko no Tatsujin 2 (Japan, TK21 Ver.C) | `taiko2` | 2001 | MEM(N) + EXIO + CD-ROM | `nm-002.bin` | Tested working |
-| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | `nm-003.bin` | Mild graphical issue on the opening attract screen, a vertical band of coloured pixels to the right side of the play field, neither affect gameplay |
+| Taiko no Tatsujin 3 (Japan, TK31 Ver.A) | `taiko3` | 2002 | MEM(N) + EXIO + CD-ROM | `nm-003.bin` | Tested working |
 | Taiko no Tatsujin 4 (Japan, TK41 Ver.A) | `taiko4` | 2002 | MEM(N) + EXIO + CD-ROM | `tk-41.bin` | Tested working |
 | Taiko no Tatsujin 5 (Japan, TK51 Ver.A) | `taiko5` | 2003 | MEM(N) + EXIO + CD-ROM | `tk-5.bin` | Tested working |
 | Taiko no Tatsujin 6 (Japan, TK61 Ver.A) | `taiko6` | 2004 | MEM(N) + EXIO + CD-ROM | `tk-6.bin` | Tested working |
@@ -270,6 +269,9 @@ MAME 0.289's `namcos10` driver is the reference for this core, which matches it 
   CRT, Sinden, Gun4IR) through MiSTer's gun support.
 * **Mr. Driller 2 operator menu.** MAME lists "opening the operator menu sometimes can crash Mr. Driller 2" as a
   known issue. On the core it opens reliably.
+* **Taiko no Tatsujin 3 right edge.** During songs the game keeps scratch data just right of its 320-pixel frame
+  buffer and starts the picture 2 pixels in, so MAME shows a strip of coloured dots down the right edge. The core
+  blanks the picture past the frame buffer for this game (a flag in its MRA), so the edge stays clean.
 * **Gamshara region.** MAME's driver notes that it is unknown whether the later Gamshara set (20020912A) honours the
   World region setting like the earlier one. It does, so the MRA defaults to World (English).
 
@@ -303,9 +305,11 @@ decoder. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Known issues
 
-* **Taiko no Tatsujin 5 and 6:** sometimes a song's preview does not play on the song-select screen.
-* **Taiko no Tatsujin 3:** a mild graphical issue on the opening attract screen, a single line vertical band of coloured pixels
-  to the right side (outside) of the play field.
+None at the moment.
+
+* **Taiko song previews or music silent for some songs:** check that the disc `.bin` on the SD card is complete (its size
+  must match the one `chdman` wrote on your PC). A truncated copy still boots, because the game's own files sit at the
+  start of the disc, but every song stored past the cut-off plays silence.
 
 ## Releases
 

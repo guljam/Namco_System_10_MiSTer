@@ -73,7 +73,9 @@ module s10_p3 (
     reg   [3:0] job_beats = 0;
     reg  [27:0] job_addr = 0;
     reg         job_done = 1'b0;            // clk2
-    reg  [63:0] rbuf [0:15];                // clk2 writes, clk reads after job_done
+    reg  [63:0] rbuf [0:15];                // clk2 writes, clk reads after job_done1
+    reg         job_done1 = 1'b0;           // job_done one clk later: rbuf has then been stable for a whole clk,
+                                            // so rbuf -> clk is a false path (Namco_S10.sdc)
 
     // write FIFO {beat address 25 bits, be 8, data 64} = 97 bits, 64 entries
     (* ramstyle = "no_rw_check" *) reg [96:0] wf_mem [0:63];
@@ -210,11 +212,13 @@ module s10_p3 (
     wire        new_beat  = wr_win && (!cw_valid || cw_beat != {bank, addr[16:3]});
     wire        push      = cw_valid && !wf_full && ((wr_win && cw_beat != {bank, addr[16:3]}) ||
                                                      (!wr_win && (cw_age == 6'd63 || flush_now)));
+    always @(posedge clk) job_done1 <= job_done;
+
     always @(posedge clk) begin
         rdata    <= 0;
         play_req <= 1'b0;
         stop_req <= 1'b0;
-        if (job_req && job_done) job_req <= 1'b0;
+        if (job_req && job_done1) job_req <= 1'b0;
         if (push) begin
             wf_mem[wf_wp[5:0]] <= {cw_beat, cw_be, cw_data};
             wf_wp <= wf_wp + 1'd1;
@@ -278,14 +282,14 @@ module s10_p3 (
                     if (rp) begin job({1'b0, bank, rp_off} , 4'd1); hst <= H_RDW; end
                     else    begin job(28'h7E0000, 4'd1); hst <= H_CMDW; end          // command at MCU 0xFE0000
                 end
-                H_RDW: if (job_req && job_done) hst <= H_RDDONE;
+                H_RDW: if (job_req && job_done1) hst <= H_RDDONE;
                 H_RDDONE: begin
                     // 16-bit (or 32-bit) read of the window
                     rdata <= rp_off[2] ? rbuf[0][63:32] : rbuf[0][31:0];
                     rp    <= 1'b0;
                     hst   <= H_IDLE;
                 end
-                H_CMDW: if (job_req && job_done) begin
+                H_CMDW: if (job_req && job_done1) begin
                     case (rbuf[0][15:0])
                         16'h004C: begin sel <= rbuf[0][31:16]; busy <= 1'b0; hst <= H_IDLE; end
                         16'h0056: begin volume <= (rbuf[0][31:16] > 16'd76) ? 7'd76 : rbuf[0][22:16]; busy <= 1'b0; hst <= H_IDLE; end
@@ -295,7 +299,7 @@ module s10_p3 (
                     endcase
                 end
                 H_ENT: if (!job_req) begin job(28'h7E0000 + {12'd0, sel}, 4'd1); hst <= H_ENTW; end
-                H_ENTW: if (job_req && job_done) begin
+                H_ENTW: if (job_req && job_done1) begin
                     s_off <= rbuf[0][23:0];
                     s_len <= rbuf[0][55:32];
                     smp   <= 0;
@@ -309,7 +313,7 @@ module s10_p3 (
                     crc_i <= 0;
                     hst   <= H_SMPW;
                 end
-                H_SMPW: if (job_req && job_done) hst <= H_CRC;
+                H_SMPW: if (job_req && job_done1) hst <= H_CRC;
                 H_CRC: begin
                     crc   <= crc8(crc, rbyte(crc_i + {4'd0, smp_sh}));
                     crc_i <= crc_i + 1'd1;

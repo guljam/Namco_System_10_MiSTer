@@ -27,3 +27,10 @@ set_false_path -from {emu|pll2|pll2_inst|altera_pll_i|cyclonev_pll|counter[0].ou
 set_clock_uncertainty -setup -add \
    -from [get_clocks {emu|pll|pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}] \
    -to   [get_clocks {emu|pll|pll_inst|altera_pll_i|general[2].gpll~PLL_OUTPUT_COUNTER|divclk}] 0.400
+
+# MEM(P3) job buffer: s10_p3 reads rbuf (written on clk_2x) only after job_done has been registered on clk_1x, so
+# rbuf is stable for at least one clk_1x before it is used and cannot change until the next job.
+set_false_path -from [get_keepers {*s10_p3:s10_p3|rbuf*}] -to [get_clocks {emu|pll|pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}]
+# PSX savestate SPU-RAM capture (clk_1x -> clk_2x): only active while a savestate is saved; savestates are tied off
+# in this core (save_state / load_state = 0).
+set_false_path -from [get_keepers {*isavestates|SPURAM_dataRead1x*}] -to [get_keepers {*isavestates|SPURAM_dataRead2x*}]
